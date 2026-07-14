@@ -21,6 +21,14 @@ public sealed class LookupRepository : ILookupRepository
             cancellationToken: cancellationToken));
     }
 
+    public async Task<IEnumerable<PublishStatusLookup>> GetPublishStatusesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        return await connection.QueryAsync<PublishStatusLookup>(new CommandDefinition(
+            "SELECT pkid, Description FROM PublishStatus ORDER BY pkid ASC",
+            cancellationToken: cancellationToken));
+    }
+
     public async Task<IEnumerable<PartnerLookup>> GetPartnersAsync(CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);

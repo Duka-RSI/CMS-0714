@@ -20,6 +20,11 @@ public class LookupsController : ControllerBase
     public async Task<ActionResult<IEnumerable<AppUserLookup>>> GetAppUsers(CancellationToken cancellationToken)
         => Ok(await _repository.GetAppUsersAsync(cancellationToken));
 
+    /// <summary>Slim PublishStatus list for Course/Promotion FK dropdowns.</summary>
+    [HttpGet("publish-statuses")]
+    public async Task<ActionResult<IEnumerable<PublishStatusLookup>>> GetPublishStatuses(CancellationToken cancellationToken)
+        => Ok(await _repository.GetPublishStatusesAsync(cancellationToken));
+
     /// <summary>Slim Partner list for Course/Certification/PartnerCourseGroup FK dropdowns.</summary>
     [HttpGet("partners")]
     public async Task<ActionResult<IEnumerable<PartnerLookup>>> GetPartners(CancellationToken cancellationToken)

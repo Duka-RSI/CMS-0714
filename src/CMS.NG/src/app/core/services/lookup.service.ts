@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '@env/environment';
 import { AppUserLookup } from '@app/core/models/app-user-lookup.model';
+import { PublishStatusLookup } from '@app/core/models/publish-status-lookup.model';
 import { PartnerLookup } from '@app/core/models/partner-lookup.model';
 
 /** Data access for slim lookup lists used to populate dropdowns/multiselects. */
@@ -13,6 +14,10 @@ export class LookupService {
 
   getAppUsers(): Observable<AppUserLookup[]> {
     return this.http.get<AppUserLookup[]>(`${this.baseUrl}/app-users`);
+  }
+
+  getPublishStatuses(): Observable<PublishStatusLookup[]> {
+    return this.http.get<PublishStatusLookup[]>(`${this.baseUrl}/publish-statuses`);
   }
 
   getPartners(): Observable<PartnerLookup[]> {
