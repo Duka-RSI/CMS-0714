@@ -5,4 +5,5 @@ namespace CMS.API.Repositories;
 public interface ILookupRepository
 {
     Task<IEnumerable<AppUserLookup>> GetAppUsersAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<PartnerLookup>> GetPartnersAsync(CancellationToken cancellationToken = default);
 }

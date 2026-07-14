@@ -41,6 +41,10 @@ export class App {
       ],
     },
     {
+      title: '課程管理 Course',
+      items: [{ label: '合作廠商 Partner', icon: 'pi pi-building', route: '/partners' }],
+    },
+    {
       title: '系統管理 Admin',
       items: [
         { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },

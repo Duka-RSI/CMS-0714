@@ -19,4 +19,9 @@ public class LookupsController : ControllerBase
     [HttpGet("app-users")]
     public async Task<ActionResult<IEnumerable<AppUserLookup>>> GetAppUsers(CancellationToken cancellationToken)
         => Ok(await _repository.GetAppUsersAsync(cancellationToken));
+
+    /// <summary>Slim Partner list for Course/Certification/PartnerCourseGroup FK dropdowns.</summary>
+    [HttpGet("partners")]
+    public async Task<ActionResult<IEnumerable<PartnerLookup>>> GetPartners(CancellationToken cancellationToken)
+        => Ok(await _repository.GetPartnersAsync(cancellationToken));
 }

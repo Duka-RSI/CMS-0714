@@ -20,4 +20,12 @@ public sealed class LookupRepository : ILookupRepository
             "SELECT UserId, UserName FROM AppUser ORDER BY UserName ASC",
             cancellationToken: cancellationToken));
     }
+
+    public async Task<IEnumerable<PartnerLookup>> GetPartnersAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        return await connection.QueryAsync<PartnerLookup>(new CommandDefinition(
+            "SELECT pkid, Name FROM Partner ORDER BY DisplayOrder ASC, Name ASC",
+            cancellationToken: cancellationToken));
+    }
 }
