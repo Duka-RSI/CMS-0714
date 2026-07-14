@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { environment } from '@env/environment';
 import { AppUserLookup } from '@app/core/models/app-user-lookup.model';
 import { CourseGroupLookup } from '@app/core/models/course-group-lookup.model';
+import { PublishStatusLookup } from '@app/core/models/publish-status-lookup.model';
+import { PartnerLookup } from '@app/core/models/partner-lookup.model';
 
 /** Data access for slim lookup lists used to populate dropdowns/multiselects. */
 @Injectable({ providedIn: 'root' })
@@ -17,5 +19,13 @@ export class LookupService {
 
   getCourseGroups(): Observable<CourseGroupLookup[]> {
     return this.http.get<CourseGroupLookup[]>(`${this.baseUrl}/course-groups`);
+  }
+
+  getPublishStatuses(): Observable<PublishStatusLookup[]> {
+    return this.http.get<PublishStatusLookup[]>(`${this.baseUrl}/publish-statuses`);
+  }
+
+  getPartners(): Observable<PartnerLookup[]> {
+    return this.http.get<PartnerLookup[]>(`${this.baseUrl}/partners`);
   }
 }

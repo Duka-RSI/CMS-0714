@@ -1,0 +1,33 @@
+<div class="page">
+  <div class="page-header">
+    <h1 class="title">檢視發布狀態</h1>
+    <div class="actions">
+      <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="goBack()" />
+      <p-button label="編輯" icon="pi pi-pencil" (onClick)="goEdit()" />
+    </div>
+  </div>
+
+  @if (status(); as s) {
+    <div class="card">
+      <h2 class="section-title">發布狀態資料</h2>
+      <dl class="detail-grid">
+        <dt>主代碼</dt>
+        <dd>{{ s.pkid }}</dd>
+
+        <dt>狀態說明</dt>
+        <dd>{{ s.description }}</dd>
+
+        <dt>草稿</dt>
+        <dd><p-tag [value]="s.isDraft ? '是' : '否'" [severity]="s.isDraft ? 'info' : 'secondary'" /></dd>
+
+        <dt>已發布</dt>
+        <dd><p-tag [value]="s.isPublished ? '是' : '否'" [severity]="s.isPublished ? 'success' : 'secondary'" /></dd>
+
+        <dt>已停用</dt>
+        <dd><p-tag [value]="s.isDiscontinued ? '是' : '否'" [severity]="s.isDiscontinued ? 'danger' : 'secondary'" /></dd>
+      </dl>
+    </div>
+  } @else if (!loading()) {
+    <div class="card empty">查無資料。</div>
+  }
+</div>

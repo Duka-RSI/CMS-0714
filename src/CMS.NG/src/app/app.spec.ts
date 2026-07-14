@@ -26,10 +26,10 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.brand-name')?.textContent).toContain('UWA');
+    expect(compiled.querySelector('.logo-text')?.textContent).toContain('UWA');
   });
 
-  it('should expose the Admin nav group containing 角色 AppRole', () => {
+  it('should render the Admin section with a 角色 AppRole link', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -37,7 +37,12 @@ describe('App', () => {
     expect(text).toContain('系統管理 Admin');
     expect(text).toContain('角色 AppRole');
 
-    const appRoleLink = Array.from(compiled.querySelectorAll('a.nav-child')).find((a) =>
+    const sectionTitles = Array.from(compiled.querySelectorAll('.menu-section-title')).map(
+      (el) => el.textContent?.trim(),
+    );
+    expect(sectionTitles).toContain('系統管理 Admin');
+
+    const appRoleLink = Array.from(compiled.querySelectorAll('a.menu-item')).find((a) =>
       a.textContent?.includes('角色 AppRole'),
     );
     expect(appRoleLink?.getAttribute('href')).toContain('/app-roles');

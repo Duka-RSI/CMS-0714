@@ -1,0 +1,73 @@
+<form [formGroup]="form" (ngSubmit)="save()" class="page">
+  <div class="page-header">
+    <h1 class="title">{{ isEdit() ? '編輯發布狀態' : '新增發布狀態' }}</h1>
+    <div class="actions">
+      <p-button
+        type="button"
+        label="取消"
+        icon="pi pi-times"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="cancel()"
+      />
+      <p-button
+        type="submit"
+        label="儲存"
+        icon="pi pi-check"
+        severity="success"
+        [loading]="saving()"
+      />
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">發布狀態資料</h2>
+
+    <div class="field">
+      <label for="pkid">主代碼 <span class="text-required">*</span></label>
+      <p-inputNumber
+        inputId="pkid"
+        formControlName="pkid"
+        [useGrouping]="false"
+        [min]="0"
+        [max]="255"
+        placeholder="請輸入主代碼 (0–255)"
+      />
+      @if (isEdit()) {
+        <small class="hint">主代碼為主鍵，編輯時不可修改。</small>
+      } @else if (form.controls.pkid.invalid && form.controls.pkid.touched) {
+        <small class="error">請輸入 0–255 的主代碼。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="description">狀態說明 <span class="text-required">*</span></label>
+      <input
+        id="description"
+        type="text"
+        pInputText
+        formControlName="description"
+        maxlength="50"
+        placeholder="請輸入狀態說明"
+      />
+      @if (form.controls.description.invalid && form.controls.description.touched) {
+        <small class="error">請輸入狀態說明。</small>
+      }
+    </div>
+
+    <div class="field field-switch">
+      <label for="isDraft">草稿</label>
+      <p-toggleswitch inputId="isDraft" formControlName="isDraft" />
+    </div>
+
+    <div class="field field-switch">
+      <label for="isPublished">已發布</label>
+      <p-toggleswitch inputId="isPublished" formControlName="isPublished" />
+    </div>
+
+    <div class="field field-switch">
+      <label for="isDiscontinued">已停用</label>
+      <p-toggleswitch inputId="isDiscontinued" formControlName="isDiscontinued" />
+    </div>
+  </div>
+</form>
