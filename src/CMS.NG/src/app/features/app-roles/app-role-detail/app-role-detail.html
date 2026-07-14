@@ -1,0 +1,46 @@
+<div class="page">
+  <div class="page-header">
+    <h1 class="title">檢視角色</h1>
+    <div class="actions">
+      <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="goBack()" />
+      <p-button label="編輯" icon="pi pi-pencil" (onClick)="goEdit()" />
+    </div>
+  </div>
+
+  @if (role(); as r) {
+    <div class="card">
+      <h2 class="section-title">角色資料</h2>
+      <dl class="detail-grid">
+        <dt>主代碼</dt>
+        <dd>{{ r.pkid }}</dd>
+
+        <dt>角色代碼</dt>
+        <dd>{{ r.roleId }}</dd>
+
+        <dt>角色名稱</dt>
+        <dd>{{ r.roleName }}</dd>
+
+        <dt>權限等級</dt>
+        <dd>{{ r.permissionLevel }}</dd>
+
+        <dt>描述</dt>
+        <dd>{{ r.description || '—' }}</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">使用者 <span class="count">（{{ r.userCount }}）</span></h2>
+      @if (userLabels().length > 0) {
+        <div class="chips">
+          @for (label of userLabels(); track label) {
+            <p-tag [value]="label" severity="secondary" />
+          }
+        </div>
+      } @else {
+        <p class="empty">此角色目前沒有指派任何使用者。</p>
+      }
+    </div>
+  } @else if (!loading()) {
+    <div class="card empty">查無資料。</div>
+  }
+</div>

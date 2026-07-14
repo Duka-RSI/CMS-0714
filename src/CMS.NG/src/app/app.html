@@ -1,0 +1,56 @@
+<div class="app-shell" [class.sidebar-collapsed]="sidebarCollapsed()">
+  <!-- Sidebar -->
+  <aside class="app-sidebar">
+    <div class="brand">
+      <span class="brand-name" [hidden]="sidebarCollapsed()">{{ title() }}</span>
+      <button type="button" class="brand-toggle" (click)="toggleSidebar()" aria-label="toggle sidebar">
+        <i class="pi" [class.pi-angle-left]="!sidebarCollapsed()" [class.pi-angle-right]="sidebarCollapsed()"></i>
+      </button>
+    </div>
+
+    <nav class="nav">
+      @for (group of navGroups(); track group.label) {
+        <div class="nav-group">
+          <button
+            type="button"
+            class="nav-group-header"
+            [class.expandable]="group.children.length > 0"
+            (click)="toggleGroup(group)"
+          >
+            <i class="nav-icon" [class]="group.icon"></i>
+            <span class="nav-label">{{ group.label }}</span>
+            @if (group.children.length > 0) {
+              <i class="nav-caret pi" [class.pi-angle-down]="group.expanded" [class.pi-angle-right]="!group.expanded"></i>
+            }
+          </button>
+
+          @if (group.expanded && group.children.length > 0) {
+            <div class="nav-children">
+              @for (item of group.children; track item.label) {
+                @if (item.route) {
+                  <a class="nav-child" [routerLink]="item.route" routerLinkActive="active">
+                    <i class="nav-icon" [class]="item.icon"></i>
+                    <span class="nav-label">{{ item.label }}</span>
+                  </a>
+                } @else {
+                  <span class="nav-child disabled">
+                    <i class="nav-icon" [class]="item.icon"></i>
+                    <span class="nav-label">{{ item.label }}</span>
+                  </span>
+                }
+              }
+            </div>
+          }
+        </div>
+      }
+    </nav>
+  </aside>
+
+  <!-- Content -->
+  <main class="app-content">
+    <router-outlet />
+  </main>
+</div>
+
+<p-toast position="top-right" />
+<p-confirmdialog />
