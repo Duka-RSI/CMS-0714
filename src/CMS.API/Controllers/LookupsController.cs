@@ -19,4 +19,9 @@ public class LookupsController : ControllerBase
     [HttpGet("app-users")]
     public async Task<ActionResult<IEnumerable<AppUserLookup>>> GetAppUsers(CancellationToken cancellationToken)
         => Ok(await _repository.GetAppUsersAsync(cancellationToken));
+
+    /// <summary>Slim CourseGroup list for FK dropdowns (e.g. the Course form).</summary>
+    [HttpGet("course-groups")]
+    public async Task<ActionResult<IEnumerable<CourseGroupLookup>>> GetCourseGroups(CancellationToken cancellationToken)
+        => Ok(await _repository.GetCourseGroupsAsync(cancellationToken));
 }

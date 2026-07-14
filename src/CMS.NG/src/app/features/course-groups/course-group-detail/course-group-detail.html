@@ -1,0 +1,30 @@
+<div class="page">
+  <div class="page-header">
+    <h1 class="title">檢視課程群組</h1>
+    <div class="actions">
+      <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="goBack()" />
+      <p-button label="編輯" icon="pi pi-pencil" (onClick)="goEdit()" />
+    </div>
+  </div>
+
+  @if (group(); as g) {
+    <div class="card">
+      <h2 class="section-title">群組資料</h2>
+      <dl class="detail-grid">
+        <dt>主代碼</dt>
+        <dd>{{ g.pkid }}</dd>
+
+        <dt>群組名稱</dt>
+        <dd>{{ g.description }}</dd>
+
+        <dt>課程數</dt>
+        <dd>{{ g.courseCount }}</dd>
+
+        <dt>廠商群組數</dt>
+        <dd>{{ g.partnerCourseGroupCount }}</dd>
+      </dl>
+    </div>
+  } @else if (!loading()) {
+    <div class="card empty">查無資料。</div>
+  }
+</div>

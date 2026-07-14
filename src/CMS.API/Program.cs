@@ -22,6 +22,7 @@ builder.Services.AddSwaggerGen(options =>
 // Data access
 builder.Services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
 builder.Services.AddScoped<IAppRoleRepository, AppRoleRepository>();
+builder.Services.AddScoped<ICourseGroupRepository, CourseGroupRepository>();
 builder.Services.AddScoped<ILookupRepository, LookupRepository>();
 
 // CORS — allow the Angular dev server (and any localhost origin) during development.

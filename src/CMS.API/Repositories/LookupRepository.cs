@@ -20,4 +20,12 @@ public sealed class LookupRepository : ILookupRepository
             "SELECT UserId, UserName FROM AppUser ORDER BY UserName ASC",
             cancellationToken: cancellationToken));
     }
+
+    public async Task<IEnumerable<CourseGroupLookup>> GetCourseGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        return await connection.QueryAsync<CourseGroupLookup>(new CommandDefinition(
+            "SELECT pkid, Description FROM CourseGroup ORDER BY pkid ASC",
+            cancellationToken: cancellationToken));
+    }
 }
