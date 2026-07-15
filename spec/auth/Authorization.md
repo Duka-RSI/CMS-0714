@@ -19,6 +19,20 @@ endpoint. `AuthController` is the single opt-out.
 | API — Lookups, Courses, Partners, CourseGroups, FeaturedPromoItems | any logged-in user |
 | NG | login page (public), route guard, bearer interceptor, 401 → sign out, Admin-only menu |
 
+## Traps that fail silently
+
+These are the ones that compile, pass a casual smoke test, and are wrong. CLAUDE.md points
+here rather than carrying them, so read this table before touching auth.
+
+| Trap | What happens if you get it wrong | Detail |
+|------|----------------------------------|--------|
+| `MapInboundClaims = false` on JwtBearer | At the default, IdentityModel rewrites `role` to a URI; `RoleClaimType = "role"` then matches nothing and **every `[Authorize(Roles=...)]` rejects every Admin** | [JwtBearer configuration](#jwtbearer-configuration-programcs) |
+| `[AllowAnonymous]` on `AuthController` is **inherited by its actions** | A new action there is **public** unless it carries its own `[Authorize]`; the global fallback will not save it | [Global policy + opt-outs](#global-policy--opt-outs) |
+| 401 vs 400 for an authenticated caller | A 401 to someone who merely mistyped (e.g. a wrong current password) trips `authErrorInterceptor`, clears the session and **signs them out over a typo**. Use 400 | [Change password](#change-password--post-apiauthchange-password) |
+| The password policy exists **twice** | `Security/PasswordPolicy.cs` and `core/utils/password-policy.ts`, message included. Let them drift and the form accepts what the server rejects | [Change password](#change-password--post-apiauthchange-password) |
+| The client's symbol class must be `[^\p{L}\p{Nd}]` | `\p{N}` swallows `½` (category `No`), which .NET calls a symbol — the two checks then disagree | [Change password](#change-password--post-apiauthchange-password) |
+| `PasswordHash` may only be read via `AuthRepository` | `AppUserRepository`'s projection never selects it, and that guarantee is what keeps it out of every response model | [Why a separate AuthRepository](Login.md) |
+
 ---
 
 ## Backend
