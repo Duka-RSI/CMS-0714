@@ -22,4 +22,14 @@ public interface IAuthRepository
     /// which also syncs roles. UserName is the only column this can touch.
     /// </remarks>
     Task<bool> UpdateUserNameAsync(string userId, string userName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores a new <paramref name="passwordHash"/> for <paramref name="userId"/> and stamps
+    /// PasswordUpdatedTime with the current UTC time. False when no such user exists.
+    /// </summary>
+    /// <remarks>
+    /// Takes an already-hashed value: hashing is the caller's job, so a plaintext password
+    /// can never reach the repository layer or a SQL parameter.
+    /// </remarks>
+    Task<bool> UpdatePasswordAsync(string userId, string passwordHash, CancellationToken cancellationToken = default);
 }

@@ -107,6 +107,47 @@ and roles read-only; only UserName is editable.
   the session, so the page needs no fetch. The trade-off is that a name changed by an admin
   elsewhere will not show until the user logs in again.
 
+### Change password — `POST /api/Auth/change-password`
+
+Self-service, on the same 我的帳號 page. `[Authorize]` for the same reason as the profile
+endpoint. Account from the token's `sub`; plaintext in, **204 and an empty body out** — no
+hash crosses the wire in either direction.
+
+Checks run in this order, and any failure writes nothing:
+
+1. `PasswordHasher.Verify(current, storedHash)` — the current password must be right.
+2. `PasswordPolicy.IsCompliant(new)` — length ≥ 8 **and** ≥ 3 of the 4 character classes.
+3. `new == confirm`, compared `Ordinal` (a password comparison must never apply culture rules).
+4. `UpdatePasswordAsync` stores SHA-256 of the new password and stamps `PasswordUpdatedTime`
+   via `GETUTCDATE()`, matching `AppUserRepository.ResetPasswordAsync` — one clock stamps
+   that column however the password changed.
+
+> ⚠️ **A wrong current password returns 400, never 401.** The caller *is* authenticated;
+> they mistyped. A 401 would trip `authErrorInterceptor`, clear the session and bounce them
+> to the login page for a typo. `ChangePassword_WithAWrongCurrentPassword_Returns400Not401`
+> and its pipeline counterpart pin this.
+
+**The policy** (`Security/PasswordPolicy.cs`) applies to passwords a user picks for
+themselves. It deliberately does *not* gate the SysConfig default that AppUser create/reset
+assigns — that value is the admin's choice, and validating it there would turn a bad config
+into a failure to create users. "Symbol" is anything that is not a letter or a digit;
+caseless letters (CJK) count towards no class, so an all-Chinese password is rejected however
+long. Nothing is trimmed — spaces are part of the secret.
+
+`RequirementMessage` is bilingual and shown verbatim in the UI. It is duplicated in
+`core/utils/password-policy.ts`, and both suites assert the exact string: if they drift, the
+form starts accepting passwords the server rejects.
+
+> **Unicode gotcha in the client mirror**: the symbol class must be `[^\p{L}\p{Nd}]`, not
+> `[^\p{L}\p{N}]`. .NET's `char.IsDigit` is `Nd` only, so `½` (category `No`) is a *symbol*
+> server-side; `\p{N}` would swallow it and the two checks would disagree.
+
+Complexity limits guessing; it does not redeem unsalted SHA-256 as a KDF (see `AppUser.md`).
+
+> `SysConfig.appConfig` carries an `enforcePasswordPolicy: true` flag that **nothing reads**.
+> The policy is currently unconditional. Wiring the flag was not asked for and would let a
+> config edit silently disable complexity — raise it before binding it.
+
 ### PublishStatuses is Admin-only, its lookup is not
 
 `/api/publish-statuses` (the maintenance CRUD) requires Admin; the non-admin Course and
@@ -125,7 +166,8 @@ to any logged-in user. The same split applies to `/api/lookups/app-roles`.
 | `core/interceptors/auth-error.interceptor.ts` | 401 → clear session → `/login` |
 | `core/guards/auth.guard.ts` | blocks routes without a token |
 | `features/auth/login/` | the public login page |
-| `features/profile/my-profile/` | 我的帳號 — `/profile`, reachable by every role |
+| `features/profile/my-profile/` | 我的帳號 — `/profile`, reachable by every role; rename + change password |
+| `core/utils/password-policy.ts` | client mirror of the API's complexity rule |
 | `testing/jwt.fixture.ts` | `tokenWithRoles()` for specs |
 
 - **Session storage, not local storage** (`auth-profile`): the session dies with the tab,
@@ -164,7 +206,16 @@ to any logged-in user. The same split applies to `/api/lookups/app-roles`.
 
 ## Tests
 
-**Backend** — `AuthProfileControllerTests` covers the profile endpoint: renames the token's
+**Backend** — `PasswordPolicyTests` covers the complexity rule exhaustively (length
+boundary, every 3-of-4 combination, every ≤2-class rejection, what counts as a symbol,
+caseless letters, no trimming). `AuthChangePasswordControllerTests` covers the endpoint:
+wrong current password writes nothing and returns 400 (not 401), each check runs in order,
+complexity and confirmation rejections write nothing, and a valid change stores exactly
+`PasswordHasher.Hash(new)` as 64-char lower-case hex. `PasswordUpdatedTime` is stamped by
+`GETUTCDATE()` inside the SQL, so a mocked repository cannot observe it — that assertion is
+made against the live database instead (below).
+
+`AuthProfileControllerTests` covers the profile endpoint: renames the token's
 user, ignores a UserId in the body, rejects blank/whitespace names without writing, trims,
 and 401/404 on the token edge cases. (It supplies a `ProblemDetailsFactory` on the test
 HttpContext: `ValidationProblem()` resolves one off request services, and a bare
@@ -201,6 +252,16 @@ tampered token in storage → API 401 → session cleared → `/login`. By curl:
 on `/api/courses`, `/api/app-roles`, `/api/lookups/app-roles`; non-Admin token → 200 on
 courses, 403 on app-roles/app-users; Admin token → 200 on all three.
 
+Change password, against the real database: no token → 401; wrong current password → 400
+with the session intact (and in the browser, still on `/profile`, still signed in); a
+lowercase-only or too-short new password → 400 with the bilingual message; a mismatched
+confirmation → 400 — and after all four, `PasswordHash` and `PasswordUpdatedTime` were
+**unchanged**. A valid change → 204 with a zero-byte body; `PasswordHash` then equalled
+`SHA256('Str0ng!pass')`, `PasswordUpdatedTime` was stamped, the old password no longer
+logged in (401) and the new one did (200). In the browser, a non-compliant or mismatched
+entry was refused client-side with no request sent, and a successful change cleared all
+three fields and kept the session.
+
 Profile, against the real database: `PUT /api/Auth/profile` with no token → 401; as `test`
 with a body of `{"userId":"miles@uuu.com.tw","roleIds":["Admin"],"userName":"  孫小明  "}`
 → 200 `{"userId":"test","userName":"孫小明"}` — the body's userId ignored, the name
@@ -214,6 +275,12 @@ and sessionStorage immediately, and a whitespace-only name is refused client-sid
 
 - **No refresh tokens / no silent renewal.** A 24h token simply expires and the next API
   call bounces the user to the login page.
+- **Changing a password does not invalidate existing tokens**, including the caller's own —
+  it stays signed in, and a token issued to a session elsewhere keeps working until it
+  expires. Same root cause as the revocation gap below.
+- **No "new password must differ from the current one" rule**, and no history: re-submitting
+  the current password succeeds. Not asked for; `ChangePassword_AllowsReusingTheCurrentPassword`
+  documents it so the behaviour is a decision rather than an accident.
 - **No server-side revocation.** The `jti` claim exists to make it possible; nothing
   consumes it yet. Deactivating a user (`IsActive = 0`) blocks *new* logins but does not
   invalidate a token already issued — it stays valid until it expires.

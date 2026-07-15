@@ -74,6 +74,33 @@
   padding: 2px 0;
 }
 
+/* Second form on the page: it has no sticky header of its own. */
+.password-section {
+  margin-top: 16px;
+}
+
+.password-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.form-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* PrimeNG wraps p-password around its input; both need the full width. */
+:host ::ng-deep .full-width,
+:host ::ng-deep .full-width input {
+  width: 100%;
+}
+
 .hint {
   color: #64748b;
   font-size: 12px;

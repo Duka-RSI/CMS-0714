@@ -27,5 +27,15 @@ export interface UserProfile {
   userName: string;
 }
 
+/**
+ * Body of POST /api/Auth/change-password. Plaintext only — the client never sees, sends or
+ * computes a hash, and the account comes from the token.
+ */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 /** AppRole.RoleId that unlocks the 系統管理 section. Mirrors RoleNames.Admin on the API. */
 export const ADMIN_ROLE = 'Admin';

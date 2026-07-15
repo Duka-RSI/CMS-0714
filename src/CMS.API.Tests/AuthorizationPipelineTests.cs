@@ -166,6 +166,53 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ChangePassword_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/Auth/change-password",
+            new { currentPassword = "x", newPassword = "Str0ng!pass", confirmPassword = "Str0ng!pass" });
+
+        // Same trap as UpdateProfile: [AllowAnonymous] on the controller would make this
+        // public without the action's own [Authorize].
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithAWrongCurrentPassword_Returns400SoTheClientStaysSignedIn()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+        // The factory (and its mocks) are shared across this class, so recorded invocations
+        // accumulate. Clear them here or "was never called" would be asserting about every
+        // test that ran before this one.
+        _factory.AuthRepository.Invocations.Clear();
+
+        var response = await ClientWithToken(token).PostAsJsonAsync("/api/Auth/change-password",
+            new { currentPassword = "wrong", newPassword = "Str0ng!pass", confirmPassword = "Str0ng!pass" });
+
+        // Through the real pipeline: a 401 here would sign the user out client-side.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        _factory.AuthRepository.Verify(
+            r => r.UpdatePasswordAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithAValidChange_Returns204AndLeaksNoHash()
+    {
+        _factory.AuthRepository
+            .Setup(r => r.UpdatePasswordAsync("miles@uuu.com.tw", PasswordHasher.Hash("Str0ng!pass"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token).PostAsJsonAsync("/api/Auth/change-password",
+            new { currentPassword = Password, newPassword = "Str0ng!pass", confirmPassword = "Str0ng!pass" });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+    }
+
     // ----- Everything else requires a token -----
 
     [Theory]

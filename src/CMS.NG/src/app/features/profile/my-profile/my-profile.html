@@ -52,3 +52,76 @@
     </div>
   </div>
 </form>
+
+<form [formGroup]="passwordForm" (ngSubmit)="changePassword()" class="page password-section" novalidate>
+  <div class="card">
+    <h2 class="section-title">變更密碼</h2>
+
+    @if (passwordError()) {
+      <div class="form-error" data-testid="password-error">{{ passwordError() }}</div>
+    }
+
+    <div class="field">
+      <label for="currentPassword">目前密碼 <span class="text-required">*</span></label>
+      <p-password
+        inputId="currentPassword"
+        formControlName="currentPassword"
+        [feedback]="false"
+        [toggleMask]="true"
+        autocomplete="current-password"
+        placeholder="請輸入目前密碼"
+        styleClass="full-width"
+      />
+      @if (passwordForm.controls.currentPassword.invalid && passwordForm.controls.currentPassword.touched) {
+        <small class="error">請輸入目前密碼。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="newPassword">新密碼 <span class="text-required">*</span></label>
+      <p-password
+        inputId="newPassword"
+        formControlName="newPassword"
+        [feedback]="false"
+        [toggleMask]="true"
+        autocomplete="new-password"
+        placeholder="請輸入新密碼"
+        styleClass="full-width"
+      />
+      @if (passwordForm.controls.newPassword.touched && passwordForm.controls.newPassword.hasError('required')) {
+        <small class="error">請輸入新密碼。</small>
+      } @else if (passwordForm.controls.newPassword.touched && passwordForm.controls.newPassword.hasError('policy')) {
+        <small class="error" data-testid="policy-error">{{ passwordRequirement }}</small>
+      } @else {
+        <small class="hint">{{ passwordRequirement }}</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="confirmPassword">確認新密碼 <span class="text-required">*</span></label>
+      <p-password
+        inputId="confirmPassword"
+        formControlName="confirmPassword"
+        [feedback]="false"
+        [toggleMask]="true"
+        autocomplete="new-password"
+        placeholder="請再次輸入新密碼"
+        styleClass="full-width"
+      />
+      @if (passwordForm.controls.confirmPassword.invalid && passwordForm.controls.confirmPassword.touched) {
+        <small class="error">請再次輸入新密碼。</small>
+      } @else if (passwordForm.hasError('mismatch') && passwordForm.controls.confirmPassword.touched) {
+        <small class="error" data-testid="mismatch-error">新密碼與確認密碼不一致。</small>
+      }
+    </div>
+
+    <div class="password-actions">
+      <p-button
+        type="submit"
+        label="變更密碼"
+        icon="pi pi-key"
+        [loading]="changingPassword()"
+      />
+    </div>
+  </div>
+</form>

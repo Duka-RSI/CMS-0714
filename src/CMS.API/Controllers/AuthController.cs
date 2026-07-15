@@ -137,4 +137,74 @@ public class AuthController : ControllerBase
 
         return Ok(new UserProfileResponse { UserId = userId, UserName = userName });
     }
+
+    /// <summary>
+    /// Change the signed-in user's own password.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="UpdateProfile"/>, the account comes from the token's "sub" claim.
+    /// Nothing hashed crosses the wire in either direction: plaintext in, 204 out.
+    /// </remarks>
+    /// <response code="204">Password changed.</response>
+    /// <response code="400">
+    /// Current password wrong, new password fails the policy, or the confirmation does not
+    /// match. Deliberately **not** 401 — see the comment on the current-password check.
+    /// </response>
+    /// <response code="401">No valid bearer token.</response>
+    /// <response code="404">The token names a user that no longer exists.</response>
+    [HttpPost("change-password")]
+    [Authorize] // Opts back in: the controller is [AllowAnonymous].
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword(
+        [FromBody] ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var userId = User.FindFirstValue(JwtTokenService.UserIdClaimType);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { message = InvalidCredentialsMessage });
+        }
+
+        var credential = await _repository.GetCredentialAsync(userId, cancellationToken);
+        if (credential is null)
+        {
+            // Valid token, but its user has been deleted since it was issued.
+            return NotFound();
+        }
+
+        // 1. The current password must be right, or nothing else happens.
+        if (!PasswordHasher.Verify(request.CurrentPassword, credential.PasswordHash))
+        {
+            // 400, not 401: the caller IS authenticated — they just mistyped. A 401 here
+            // would trip the client's session-expiry interceptor and log them out for a
+            // typo.
+            return BadRequest(new { message = "目前密碼不正確。" });
+        }
+
+        // 2. The new password must satisfy the complexity policy.
+        if (!PasswordPolicy.IsCompliant(request.NewPassword))
+        {
+            return BadRequest(new { message = PasswordPolicy.RequirementMessage });
+        }
+
+        // 3. ...and must have been typed twice identically. Ordinal: a password comparison
+        // must never apply culture rules.
+        if (!string.Equals(request.NewPassword, request.ConfirmPassword, StringComparison.Ordinal))
+        {
+            return BadRequest(new { message = "新密碼與確認密碼不一致。" });
+        }
+
+        // 4. Store the hash and stamp PasswordUpdatedTime (the repository's SQL does the stamp).
+        var updated = await _repository.UpdatePasswordAsync(
+            userId, PasswordHasher.Hash(request.NewPassword), cancellationToken);
+
+        return updated ? NoContent() : NotFound();
+    }
 }

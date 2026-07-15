@@ -87,6 +87,12 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
 - **`AuthController` is `[AllowAnonymous]`, and its actions inherit that.** A new action
   there needs its own `[Authorize]` or it is public — the global fallback will not save it.
   `PUT /profile` is the worked example.
+- **Never return 401 to an authenticated caller who merely got a value wrong** (e.g. a wrong
+  current password on change-password → **400**). The frontend treats every 401 as a session
+  expiry and signs the user out.
+- **The password policy lives twice** — `Security/PasswordPolicy.cs` and
+  `core/utils/password-policy.ts`, message included. Change one, change both; both suites
+  assert the exact string.
 - **`PasswordHash` may only be read via `AuthRepository`**; `AppUserRepository` must keep
   never selecting it. See `spec/auth/Login.md`.
 - **Update endpoints sync N-N sets from the request** — never build a PUT from a list

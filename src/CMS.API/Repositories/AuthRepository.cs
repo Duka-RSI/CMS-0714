@@ -53,4 +53,19 @@ public sealed class AuthRepository : IAuthRepository
 
         return affected > 0;
     }
+
+    public async Task<bool> UpdatePasswordAsync(string userId, string passwordHash, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+
+        // GETUTCDATE() rather than a C# timestamp, matching AppUserRepository.ResetPasswordAsync:
+        // one clock (the database's) stamps PasswordUpdatedTime however the password changed.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            @"UPDATE AppUser
+              SET PasswordHash = @PasswordHash, PasswordUpdatedTime = GETUTCDATE()
+              WHERE UserId = @UserId",
+            new { UserId = userId, PasswordHash = passwordHash }, cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
 }

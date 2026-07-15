@@ -2,7 +2,13 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { environment } from '@env/environment';
-import { ADMIN_ROLE, AuthProfile, LoginRequest, UserProfile } from '@app/core/models/auth.model';
+import {
+  ADMIN_ROLE,
+  AuthProfile,
+  ChangePasswordRequest,
+  LoginRequest,
+  UserProfile,
+} from '@app/core/models/auth.model';
 
 /** Session-storage key holding the signed-in profile. */
 const STORAGE_KEY = 'auth-profile';
@@ -109,6 +115,16 @@ export class AuthService {
         }
       }),
     );
+  }
+
+  /**
+   * Changes the signed-in user's password. Plaintext goes out, nothing comes back (204).
+   *
+   * The session is deliberately left alone: the token is not re-issued and stays valid, so
+   * a password change does not sign the user out of this tab.
+   */
+  changePassword(request: ChangePasswordRequest): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/change-password`, request);
   }
 
   /** Drops the session. Callers decide where to navigate. */
