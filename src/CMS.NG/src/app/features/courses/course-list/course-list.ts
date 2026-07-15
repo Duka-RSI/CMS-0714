@@ -1,20 +1,21 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { forkJoin } from 'rxjs';
+import { forkJoin, switchMap } from 'rxjs';
 import { TableModule, TablePageEvent } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { DrawerModule } from 'primeng/drawer';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { DatePickerModule } from 'primeng/datepicker';
+import { CheckboxModule } from 'primeng/checkbox';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmationService, MessageService, SortMeta } from 'primeng/api';
 
-import { Course, CourseQuery } from '@app/core/models/course.model';
+import { Course, CourseQuery, CourseRequest } from '@app/core/models/course.model';
 import { CourseService } from '@app/core/services/course.service';
 import { LookupService } from '@app/core/services/lookup.service';
 import { toIsoDate, fromIsoDate } from '@app/core/utils/week.util';
@@ -27,6 +28,28 @@ interface Option {
   value: number;
   label: string;
 }
+
+/** Columns editable in place on the list. Only pkid (主代碼) stays read-only. */
+type EditableField =
+  | 'title'
+  | 'courseId'
+  | 'prodCourseId'
+  | 'displayOrder'
+  | 'partnerPkid'
+  | 'courseGroupPkid'
+  | 'publishStatusPkid'
+  | 'scheduleOn'
+  | 'scheduleOff'
+  | 'hour'
+  | 'listPrice'
+  | 'learningCredit'
+  | 'canRepeat';
+
+/** What the open editor binds via ngModel (dates are Date objects while editing). */
+type EditorValue = string | number | boolean | Date | null;
+
+/** Wire value an inline edit persists (dates already converted to 'YYYY-MM-DD'). */
+type EditValue = string | number | boolean | null;
 
 /** Filter drawer binds Dates; the wire format is 'YYYY-MM-DD'. */
 interface FilterForm {
@@ -52,6 +75,7 @@ interface FilterForm {
     InputTextModule,
     SelectModule,
     DatePickerModule,
+    CheckboxModule,
     TagModule,
     TooltipModule,
   ],
@@ -64,6 +88,7 @@ export class CourseList implements OnInit {
   private readonly router = inject(Router);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly courses = signal<Course[]>([]);
   protected readonly loading = signal(false);
@@ -89,6 +114,16 @@ export class CourseList implements OnInit {
   protected sortOrder = 1;
   protected first = 0;
   protected rows = 20;
+
+  // ----- in-place cell editing state -----
+  /** The single cell currently in edit mode (dblclick to open), or null. */
+  protected readonly editingCell = signal<{ pkid: number; field: EditableField } | null>(null);
+  /** Inline validation message for the open editor; keeps the cell in edit mode. */
+  protected readonly editError = signal<string | null>(null);
+  /** True while a blur-save round-trip (getById → update) is in flight. */
+  protected readonly editSaving = signal(false);
+  /** ngModel target for whichever editor is open (string / number / boolean / Date). */
+  protected editValue: EditorValue = null;
 
   private emptyFilters(): FilterForm {
     return {
@@ -333,6 +368,227 @@ export class CourseList implements OnInit {
             : '刪除課程時發生錯誤。';
         this.messageService.add({ severity: 'error', summary: '刪除失敗', detail });
       },
+    });
+  }
+
+  // ----- in-place cell editing -----
+  isEditing(course: Course, field: EditableField): boolean {
+    const cell = this.editingCell();
+    return cell !== null && cell.pkid === course.pkid && cell.field === field;
+  }
+
+  /** Opens the editor for a cell — bound to (dblclick) only; single click never edits. */
+  beginEdit(course: Course, field: EditableField): void {
+    if (this.editSaving()) {
+      return;
+    }
+    this.editError.set(null);
+    this.editValue =
+      field === 'scheduleOn' || field === 'scheduleOff'
+        ? course[field]
+          ? fromIsoDate(course[field])
+          : null
+        : course[field];
+    this.editingCell.set({ pkid: course.pkid, field });
+    this.focusEditor();
+  }
+
+  cancelEdit(): void {
+    this.editingCell.set(null);
+    this.editError.set(null);
+  }
+
+  /**
+   * Blur handler for overlay editors (p-select / p-datepicker). Picking an option or a
+   * date blurs the input BEFORE the value lands (mousedown precedes click), so a plain
+   * blur-commit would close the editor with the old value and drop the selection. Skip
+   * the commit while the overlay is open — onSelect/onChange (value picked) and
+   * onClose/onHide (overlay dismissed) commit instead.
+   */
+  onOverlayEditorBlur(course: Course, editor: { overlayVisible?: boolean | null }): void {
+    if (!editor.overlayVisible) {
+      this.commitEdit(course);
+    }
+  }
+
+  /**
+   * Persists the open editor's value — bound to blur (and change/select for overlay
+   * editors, which is when they effectively lose focus). Validation failure keeps the
+   * cell in edit mode with an inline error; an unchanged value just closes the editor.
+   */
+  commitEdit(course: Course): void {
+    const cell = this.editingCell();
+    if (!cell || cell.pkid !== course.pkid || this.editSaving()) {
+      return;
+    }
+
+    const error = this.validateEdit(cell.field, this.editValue, course);
+    if (error) {
+      this.editError.set(error);
+      return;
+    }
+
+    const value = this.normalizeEdit(this.editValue);
+    if (value === course[cell.field]) {
+      this.cancelEdit();
+      return;
+    }
+    this.saveEdit(course, cell.field, value);
+  }
+
+  private validateEdit(field: EditableField, value: EditorValue, course: Course): string | null {
+    switch (field) {
+      case 'title':
+      case 'courseId':
+      case 'prodCourseId': {
+        const text = typeof value === 'string' ? value.trim() : '';
+        if (!text) {
+          return '此欄位為必填，不可清空。';
+        }
+        const max = field === 'title' ? 200 : 50;
+        return text.length > max ? `長度不可超過 ${max} 個字元。` : null;
+      }
+      case 'displayOrder':
+      case 'hour':
+      case 'listPrice':
+      case 'learningCredit': {
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+          return '請輸入有效的數字。';
+        }
+        // 顯示順序 may be any integer; 時數 / 定價 / 點數 must be non-negative.
+        return field !== 'displayOrder' && value < 0 ? '不可為負數。' : null;
+      }
+      case 'partnerPkid':
+      case 'publishStatusPkid':
+        return value == null ? '此欄位為必填，不可清空。' : null;
+      case 'courseGroupPkid':
+        // Nullable FK — clearing means「no group」.
+        return null;
+      case 'scheduleOn':
+      case 'scheduleOff': {
+        if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+          return '請輸入有效的日期。';
+        }
+        // ISO strings compare chronologically; the other bound comes from the row.
+        const iso = toIsoDate(value);
+        if (field === 'scheduleOn' && course.scheduleOff && iso > course.scheduleOff) {
+          return '上架日期不可晚於下架日期。';
+        }
+        if (field === 'scheduleOff' && course.scheduleOn && iso < course.scheduleOn) {
+          return '上架日期不可晚於下架日期。';
+        }
+        return null;
+      }
+      case 'canRepeat':
+        return null;
+    }
+  }
+
+  /** Editor value → wire value (trimmed text, Date → 'YYYY-MM-DD'). */
+  private normalizeEdit(value: EditorValue): EditValue {
+    if (value instanceof Date) {
+      return toIsoDate(value);
+    }
+    return typeof value === 'string' ? value.trim() : value;
+  }
+
+  /**
+   * The list row lacks the N-N pkids (populated on GET-by-id only) and the update
+   * endpoint syncs those sets — so fetch the full record first, merge the single
+   * edited field, and PUT the result. On failure the row is untouched (= revert).
+   */
+  private saveEdit(course: Course, field: EditableField, value: EditValue): void {
+    this.editSaving.set(true);
+    this.service
+      .getById(course.pkid)
+      .pipe(
+        switchMap((full) => {
+          const request: CourseRequest = {
+            pkid: full.pkid,
+            title: full.title,
+            officialTitle: full.officialTitle,
+            courseId: full.courseId,
+            prodCourseId: full.prodCourseId,
+            friendlyUrl: full.friendlyUrl,
+            displayOrder: full.displayOrder,
+            partnerPkid: full.partnerPkid,
+            courseGroupPkid: full.courseGroupPkid,
+            publishStatusPkid: full.publishStatusPkid,
+            scheduleOn: full.scheduleOn,
+            scheduleOff: full.scheduleOff,
+            hour: full.hour,
+            listPrice: full.listPrice,
+            learningCredit: full.learningCredit,
+            material: full.material,
+            objective: full.objective,
+            target: full.target,
+            prerequisites: full.prerequisites,
+            outline: full.outline,
+            towardCertOrExam: full.towardCertOrExam,
+            note: full.note,
+            otherInfo: full.otherInfo,
+            canRepeat: full.canRepeat,
+            certificationPkids: full.certificationPkids,
+            jobCategoryPkids: full.jobCategoryPkids,
+          };
+          (request as Record<EditableField, EditValue>)[field] = value;
+          return this.service.update(request);
+        }),
+      )
+      .subscribe({
+        next: () => {
+          (course as unknown as Record<EditableField, EditValue>)[field] = value;
+          // FK edits carry a pkid — refresh the joined label the cell displays.
+          if (field === 'publishStatusPkid') {
+            course.publishStatusDescription = this.labelOf(
+              this.publishStatusOptions(),
+              value as number,
+            );
+          }
+          if (field === 'partnerPkid') {
+            course.partnerName = this.labelOf(this.partnerOptions(), value as number);
+          }
+          if (field === 'courseGroupPkid') {
+            course.courseGroupDescription =
+              value == null ? null : this.labelOf(this.courseGroupOptions(), value as number);
+          }
+          this.courses.update((list) => [...list]);
+          this.editSaving.set(false);
+          this.cancelEdit();
+          this.messageService.add({
+            severity: 'success',
+            summary: '更新成功',
+            detail: `課程「${course.title}」已更新。`,
+          });
+        },
+        error: () => {
+          // Row was never mutated, so closing the editor reverts the cell.
+          this.editSaving.set(false);
+          this.cancelEdit();
+          this.messageService.add({
+            severity: 'error',
+            summary: '儲存失敗',
+            detail: '更新課程時發生錯誤，已還原修改。',
+          });
+        },
+      });
+  }
+
+  /** dblclick opens the editor under the pointer, so hand it focus for blur-to-save. */
+  private focusEditor(): void {
+    setTimeout(() => {
+      const editor = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '.cell-editor',
+      );
+      if (!editor) {
+        return;
+      }
+      if (editor instanceof HTMLInputElement) {
+        editor.focus();
+        editor.select();
+        return;
+      }
+      editor.querySelector<HTMLElement>('input, [tabindex]')?.focus();
     });
   }
 }

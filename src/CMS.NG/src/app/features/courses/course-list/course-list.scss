@@ -144,6 +144,30 @@
   text-align: right;
 }
 
+/* In-place cell editing (dblclick to open, blur to save). */
+td.editable {
+  cursor: cell;
+}
+
+td.editable:hover {
+  background: #f0f9ff;
+}
+
+.cell-editor {
+  width: 100%;
+}
+
+td.editable ::ng-deep :is(.p-select, .p-datepicker) {
+  width: 100%;
+}
+
+.cell-error {
+  display: block;
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 12px;
+}
+
 /* Date-range pair inside the filter drawer. */
 .range {
   display: flex;
