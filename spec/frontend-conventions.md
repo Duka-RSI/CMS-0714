@@ -34,6 +34,26 @@ worked examples and `backend-conventions.md` for the API side.
   different app. Use `week.util.ts`.
   (The `'Z'`-suffix trick is for `datetime` columns only — Dapper returns those with
   `Kind = Unspecified`. It does **not** apply to `date`.)
+- **In-place list editing** (worked example: Course list, `features/courses/course-list`):
+  editing state lives in the component (an `editingCell` signal + one `editValue` ngModel
+  target), **not** PrimeNG's `pEditableColumn` — that directive is click-to-edit only and
+  has no blur-save or validation hooks. Double-click opens the editor (single click never
+  does); blur commits; Enter commits and Escape cancels on text/number inputs.
+  - **Overlay editors** (`p-select`, `p-datepicker`): picking a value blurs the input
+    *before* the value lands (mousedown precedes click), so a plain blur-commit closes
+    the editor with the old value and drops the selection. Guard blur with the editor's
+    `overlayVisible` (skip commit while open) and commit on `onSelect`/`onChange` plus
+    `onClose`/`onHide` instead.
+  - **Save = `getById` → merge the one edited field → PUT.** List rows lack the N-N
+    pkids (populated on GET-by-id only) and the update endpoints *sync* those sets — a
+    PUT built from the list row alone silently wipes the links.
+  - Validate before persisting: an inline error (`.cell-error`) keeps the cell in edit
+    mode; an unchanged value closes silently with no API call; a failed PUT reverts the
+    cell (the row is only mutated on success) and raises an error toast.
+  - FK columns edit the pkid via a lookup dropdown (`[filter]="true"` for long lists;
+    `[showClear]="true"` on nullable FKs) and refresh the row's joined label after save.
+  - Editable cells must not contain click-to-navigate links — the first click of the
+    double-click would navigate. Keep row navigation on the 操作-column buttons.
 - **Routing**: lazy `loadComponent`. Order `.../new` **before** `.../:id`.
 - **Sidebar**: data-driven nav in `app.ts`; add each feature under its group
   (e.g. AppRole lives under `系統管理 Admin`, Partner under `課程管理 Course`).
