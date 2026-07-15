@@ -12,6 +12,9 @@ for unrelated tasks.
   (usually a stale dev server), identify the process (`netstat -ano`, then confirm it is
   `node` / `CMS.API` before killing), kill it, and start on the original port. Do not
   add alternate-port launch configs and do not let tooling auto-pick a port.
+- **Commit straight to `develop`.** It is this repo's main branch and the intended target
+  — do **not** open a feature branch first, and do not ask whether to. Push to
+  `origin develop` when asked to push. (Still only commit/push when actually asked.)
 - **Record new conventions and decisions in CLAUDE.md** as they are made — put the
   detail in the matching `spec/*.md` doc and keep a pointer or gotcha here.
 
