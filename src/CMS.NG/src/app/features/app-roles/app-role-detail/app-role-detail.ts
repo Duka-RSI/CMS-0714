@@ -9,10 +9,11 @@ import { MessageService } from 'primeng/api';
 import { AppRole } from '@app/core/models/app-role.model';
 import { AppRoleService } from '@app/core/services/app-role.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-role-detail',
-  imports: [CommonModule, ButtonModule, TagModule],
+  imports: [CommonModule, ButtonModule, TagModule, RowAuditBadge],
   templateUrl: './app-role-detail.html',
   styleUrl: './app-role-detail.scss',
 })

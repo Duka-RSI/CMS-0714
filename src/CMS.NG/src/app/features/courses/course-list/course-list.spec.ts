@@ -2,7 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MessageService, ConfirmationService, Confirmation } from 'primeng/api';
 
 import { CourseList } from './course-list';
@@ -112,6 +113,10 @@ describe('CourseList', () => {
         ConfirmationService,
         provideRouter([]),
         provideNoopAnimations(),
+        // The 操作 column hosts the compact row-audit badge, which injects RowAuditService.
+        // Compact mode never fetches on load, so nothing needs flushing.
+        provideHttpClient(),
+        provideHttpClientTesting(),
       ],
     }).compileComponents();
 

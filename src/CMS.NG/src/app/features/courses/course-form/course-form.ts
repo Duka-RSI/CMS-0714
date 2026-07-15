@@ -17,6 +17,7 @@ import { MessageService } from 'primeng/api';
 import { CourseRequest } from '@app/core/models/course.model';
 import { CourseService } from '@app/core/services/course.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 import { toIsoDate, fromIsoDate } from '@app/core/utils/week.util';
 
 interface Option {
@@ -38,6 +39,7 @@ interface Option {
     DatePickerModule,
     ToggleSwitchModule,
     MessageModule,
+    RowAuditBadge,
   ],
   templateUrl: './course-form.html',
   styleUrl: './course-form.scss',
@@ -53,6 +55,9 @@ export class CourseForm implements OnInit {
   protected readonly isEdit = signal(false);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+  // pkid the audit rows key on; captured for the history badge (the form's own pkid control
+  // is disabled in edit mode, but this keeps the badge binding a plain signal read).
+  protected readonly recordPkid = signal<number>(0);
 
   protected readonly partnerOptions = signal<Option[]>([]);
   protected readonly courseGroupOptions = signal<Option[]>([]);
@@ -123,6 +128,7 @@ export class CourseForm implements OnInit {
         );
 
         if (course) {
+          this.recordPkid.set(course.pkid);
           this.form.patchValue({
             pkid: course.pkid,
             title: course.title,

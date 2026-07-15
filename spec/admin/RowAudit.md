@@ -5,9 +5,9 @@
 
 ## Summary
 
-A cross-cutting writer that records **one RowAudit row per change to one business row**.
-It is not a CRUD feature: there is no controller, no route and no Angular side — nothing
-reads the table back yet.
+A cross-cutting writer records **one RowAudit row per change to one business row**, and a
+read side surfaces a record's history: an endpoint, and a reusable Angular badge on every
+detail/form page.
 
 `RowAuditWriter` is generic over the entity type and reads everything it needs by
 reflection, so a new feature is audited by calling it, without registering the model
@@ -17,8 +17,10 @@ anywhere.
 |------|--------|
 | Primary Key | `pkid` **int IDENTITY** — never written |
 | Written by | `Auditing/RowAuditWriter.cs` → `Repositories/RowAuditRepository.cs` |
+| Read by | `GET /api/row-audits` → `RowAuditsController` → `RowAuditRepository.GetHistoryAsync` |
 | Registration | `AddHttpContextAccessor()`, `AddScoped<IRowAuditRepository, …>`, `AddScoped<IRowAuditWriter, …>` |
 | Called by | every repository write — see [What is audited](#what-is-audited) |
+| Shown by | `core/components/row-audit-badge` — see [The read side](#the-read-side) |
 
 ## What is audited
 
@@ -111,6 +113,67 @@ Declaration order is pinned by ordering on `PropertyInfo.MetadataToken` — `Get
 guarantees no order of its own, and "the FIRST string property" depends on one. The
 per-type reflection is cached in a static `ConcurrentDictionary`.
 
+## The read side
+
+### `GET /api/row-audits?tableName={t}&pkid={id}`
+
+One record's history, **newest first**, projected to `RowAuditHistoryItem`
+(`DateTime`, `UserName`, `ActionType`, `ActionDesc` — the routing columns are the filter,
+not payload). `pkid` is a **string** query param because `RowAudit.PrimaryKeyValues` is
+nvarchar, so a string PK (`AppRole.RoleId`) would pass through too — though in practice the
+value sent is always the surrogate `pkid` (see the trap below). Blank `tableName`/`pkid` →
+400; no auth → 401.
+
+`ORDER BY [DateTime] DESC, pkid DESC` — `pkid` (IDENTITY) breaks ties, since `datetime`
+resolves to ~3.33ms and a burst of edits can share a tick. **Route is `row-audits`**
+(kebab-plural), per `backend-conventions.md`, not the `rowaudit` the original ask spelled.
+
+Reachable by **any logged-in user** (no `[Authorize(Roles)]`): the same audience that can
+already read the record can read its history, so it is not a wider disclosure.
+
+### The badge — `core/components/row-audit-badge`
+
+Reusable standalone component, inputs `tableName` and `pkid`:
+
+```html
+<app-row-audit-badge tableName="Course" [pkid]="course()?.pkid ?? 0" />
+```
+
+- On load (and whenever the inputs change, via an `effect`) it fetches the history and shows
+  the **latest** change inline — action tag + `by {user}` + local time. Empty history → a
+  neutral "尚無異動紀錄 No history"; a failed request → "無法載入 Unavailable" (it never throws).
+- Click → a `p-dialog` listing the **full trail**, newest first, with a friendly
+  "No history yet" empty state.
+- **`[compact]="true"` is the repeated-host variant** for list rows and board cells: it
+  renders only a small `pi-history` icon button (matching the 操作-column idiom), fetches
+  **nothing on load** — a page of N rows adds zero requests — and loads lazily on click,
+  fresh on every open so an inline edit between opens is never shown stale. Used in the
+  Course list 操作 column and on the promo board's occupied cells.
+- **Times use the `+ 'Z'` trick** (`{{ row.dateTime + 'Z' | date }}`): the API serialises a
+  UTC `datetime` with no zone suffix, so the pipe would otherwise read it as local. Same rule
+  as `AppUser.passwordUpdatedTime` — see `frontend-conventions.md`.
+
+> ⚠️ **The badge keys on the surrogate `pkid`, not the business PK.** The writer stores the
+> `pkid` property in `PrimaryKeyValues` even for `AppRole`/`AppUser`, whose real PK is a
+> string. So the badge must be passed `record.pkid`, and the two string-PK **forms**
+> (which keep only `RoleId`/`UserId` in the form group) capture the surrogate into a
+> `recordPkid` signal on load specifically for this.
+
+Placed on **all 13 detail and form pages** (every entity's detail + form, plus the
+FeaturedPromoItem form). On forms it renders only in edit mode (`@if (isEdit())`) — an
+unsaved record has no history, and the badge no-ops on a falsy `pkid` without a request.
+The **compact variant** additionally sits in the Course list's 操作 column (inline edits are
+audited too, and this is where they happen) and beside the promo board's row actions for
+occupied cells — the board's *full* badge is otherwise only visible after 點鉛筆 opens the
+inline edit form.
+**Not** on 我的帳號 (`my-profile`): the session/token carry only `UserId`, not the surrogate
+`pkid` the audit rows are keyed by, so the page cannot address its own history without a new
+lookup — deferred.
+
+> The `FeaturedPromoItem` form's template has a `#item` autocomplete `ng-template` that
+> shadows the `item` input, so `item()` is unreachable from the markup; the badge binds a
+> `recordPkid` computed instead.
+
 ## Decisions worth knowing
 
 ### A failed audit write never fails the caller
@@ -191,15 +254,31 @@ Parameters are typed `DbType.AnsiString` for the `varchar` columns so SqlClient 
 
 ## Tests
 
-`RowAuditWriterTests` (32) mocks `IRowAuditRepository`, so no database is touched. Covers:
+`RowAuditWriterTests` (35) mocks `IRowAuditRepository`, so no database is touched. Covers:
 Insert/Delete take the first string property (not the first property, not any string
 property, null when it is null or absent); Update lists exactly the changed names in
 declaration order, and writes **nothing** when nothing changed; collections compare
-element-wise (5 ways of differing, incl. order); `pkid` read case-insensitively and `""`
+element-wise (5 ways of differing, incl. order); `[NotAudited]` properties are skipped for
+the diff, the first-string rule and the pkid lookup; `pkid` read case-insensitively and `""`
 when absent; UserName from the `name` claim, `"system"` for no HttpContext / an
 unauthenticated identity / an absent, empty or whitespace claim; ActionDesc truncated at
 1000 ASCII characters but **500 Chinese**; UserName at 100 characters; the UTC stamp; and
 that a repository failure and an HttpContext failure are both swallowed.
+
+`RowAuditsControllerTests` (9) mocks `IRowAuditRepository`: the (tableName, pkid) filter is
+forwarded, the repository's newest-first order is preserved, an empty history is an empty
+`200`, and a blank `tableName`/`pkid` is a 400 that never queries. The SQL `ORDER BY` itself
+is a repository concern, verified live below.
+
+**Frontend** — `row-audit-badge.spec.ts` (10) mocks the HTTP layer: the badge requests the
+right `(tableName, pkid)` and shows the newest change inline; the neutral no-history state;
+**no request at all** for an unsaved record (`pkid` 0); the dialog lists the full trail
+newest-first; the dialog's friendly empty state; the "unavailable" state on an error; and
+compact mode — icon-only with **zero requests on load**, fetch-on-click opening the dialog,
+and a refetch per open. The rendered time is asserted through the same `+ 'Z'` + `formatDate`
+path so it holds in any runner timezone. Adding the badge made every detail/form page (and
+the Course list and promo board) inject `RowAuditService`, so those specs gained
+`provideHttpClient()` + `provideHttpClientTesting()`.
 
 ### Verified against the live database
 
@@ -242,6 +321,22 @@ the truncation rests on; 1000 ASCII characters fit. `UserName` (nvarchar) round-
 exactly; `ActionDesc` (varchar) preserves Big5-representable Chinese (`報表模組`) but stores
 `カナ` as `??`.
 
+**The read side**, driven end-to-end (miles as Admin; test data cleaned up after):
+`GET /api/row-audits?tableName=CourseGroup&pkid={id}` on a group created then updated twice
+returned exactly three rows newest-first — two `Update/Description` then `Insert/稽核UI測試` —
+with `dateTime` serialised **without** a `Z`; an unknown pkid → `[]`; a missing `pkid` → 400;
+no token → 401. In the browser, the detail page rendered the badge inline
+("異動紀錄 History · Update · by Miles Sun · 2026/07/15 16:37" — the stored 08:37 UTC shown as
+local 16:37, so the `+ 'Z'` trick works), and clicking it opened the dialog listing all three
+rows newest-first with the Chinese label intact.
+
+**Compact mode**, driven in the browser: the Course list rendered 20 rows and 20 history
+buttons with **zero** `row-audits` requests on load; clicking one fired exactly one GET and
+opened the dialog — which showed two real inline-edit audit rows (`Update/ScheduleOff`,
+`Update/PublishStatusPkid` by TEST), closing the loop from in-place list editing to visible
+history. The promo board: 21 occupied cells, 21 buttons, zero requests on load, one on click,
+and the friendly empty state for a record that predates the audit system.
+
 ## Known gaps (deliberate, not oversights)
 
 - **Cascade deletes are invisible.** `FK_Course_CourseGroup` is `ON DELETE CASCADE`, so
@@ -251,5 +346,15 @@ exactly; `ActionDesc` (varchar) preserves Big5-representable Chinese (`報表模
   is stamped by `GETUTCDATE()` and `datetime` resolves to ~3.33ms; two resets landing in the
   same tick produce an identical snapshot and the second is treated as "nothing changed".
   Harmless — the stored hash is the same either way.
-- **Nothing reads RowAudit back.** No controller, no route, no Angular page, and no audit
-  badge component. Writing it is the whole feature so far.
+- **The full badge fetches per record, on every detail/form load.** One extra
+  `GET /api/row-audits` per page. No caching; acceptable for a back-office CMS. Repeated
+  hosts (the Course list, the promo board) use the **compact** variant instead, which fetches
+  only on click — so lists still add zero requests on load. Other lists don't carry it yet;
+  copy the Course-list pattern when asked.
+- **我的帳號 has no badge.** The session and token carry `UserId`, not the surrogate `pkid` the
+  audit rows are keyed by, so the self-service page cannot address its own history without a
+  new lookup endpoint. Deferred rather than widened.
+- **Still no write-back UI.** RowAudit is read-only to the app; nothing edits or purges it.
+- **Rows written before the audit system existed show "尚無異動紀錄".** RowAudit only has what
+  the repositories wrote since it went live — pre-existing records legitimately have empty
+  trails until their next change.

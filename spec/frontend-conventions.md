@@ -65,6 +65,14 @@ worked examples and `backend-conventions.md` for the API side.
   Admin-only menu sections carry `adminOnly: true` — never match on the Chinese title.
 - **Sidebar**: data-driven nav in `app.ts`; add each feature under its group
   (e.g. AppRole lives under `系統管理 Admin`, Partner under `課程管理 Course`).
+- **Row-audit badge**: `<app-row-audit-badge tableName="X" [pkid]="record.pkid" />`
+  (`core/components/row-audit-badge`) goes in the `.actions` of every detail/form page —
+  forms only in edit mode. In **repeated hosts** (list 操作 columns, board cells) use
+  `[compact]="true"`: icon-only, fetches on click instead of on load, so N rows add zero
+  requests. Pass the **surrogate `pkid`**, never a string PK, since that is what
+  `RowAudit.PrimaryKeyValues` holds. It injects an HTTP service either way, so any spec that
+  renders a page hosting it needs `provideHttpClient()` + `provideHttpClientTesting()`. Full
+  detail in `spec/admin/RowAudit.md`.
 - **Bundle budget** was raised to 1MB/2MB because PrimeNG's Aura theme pushes the
   initial bundle to ~650kB. `anyComponentStyle` was raised 4kB → 6kB (warning; the 8kB
   error ceiling stands): `app.scss` owns the entire sidebar layout and already sat at

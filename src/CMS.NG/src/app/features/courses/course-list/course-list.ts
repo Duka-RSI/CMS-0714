@@ -18,6 +18,7 @@ import { ConfirmationService, MessageService, SortMeta } from 'primeng/api';
 import { Course, CourseQuery, CourseRequest } from '@app/core/models/course.model';
 import { CourseService } from '@app/core/services/course.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 import { toIsoDate, fromIsoDate } from '@app/core/utils/week.util';
 
 const FILTERS_KEY = 'course-list-filters';
@@ -78,6 +79,7 @@ interface FilterForm {
     CheckboxModule,
     TagModule,
     TooltipModule,
+    RowAuditBadge,
   ],
   templateUrl: './course-list.html',
   styleUrl: './course-list.scss',

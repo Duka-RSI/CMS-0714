@@ -14,4 +14,11 @@ namespace CMS.API.Repositories;
 public interface IRowAuditRepository
 {
     Task InsertAsync(RowAuditEntry entry, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The audit history of one record — every RowAudit row for a
+    /// (<paramref name="tableName"/>, <paramref name="primaryKeyValues"/>) pair, newest first.
+    /// </summary>
+    Task<IEnumerable<RowAuditHistoryItem>> GetHistoryAsync(
+        string tableName, string primaryKeyValues, CancellationToken cancellationToken = default);
 }

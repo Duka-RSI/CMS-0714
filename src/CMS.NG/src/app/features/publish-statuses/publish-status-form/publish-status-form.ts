@@ -13,6 +13,7 @@ import { MessageService } from 'primeng/api';
 
 import { PublishStatusRequest } from '@app/core/models/publish-status.model';
 import { PublishStatusService } from '@app/core/services/publish-status.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-publish-status-form',
@@ -24,6 +25,7 @@ import { PublishStatusService } from '@app/core/services/publish-status.service'
     InputNumberModule,
     ToggleSwitchModule,
     MessageModule,
+    RowAuditBadge,
   ],
   templateUrl: './publish-status-form.html',
   styleUrl: './publish-status-form.scss',
@@ -38,6 +40,8 @@ export class PublishStatusForm implements OnInit {
   protected readonly isEdit = signal(false);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+  // pkid the audit rows key on; captured for the history badge as a plain signal read.
+  protected readonly recordPkid = signal<number>(0);
 
   protected readonly form = this.fb.group({
     pkid: this.fb.control<number | null>(null, {
@@ -56,6 +60,7 @@ export class PublishStatusForm implements OnInit {
     if (id) {
       this.service.getById(Number(id)).subscribe({
         next: (status) => {
+          this.recordPkid.set(status.pkid);
           this.form.patchValue({
             pkid: status.pkid,
             description: status.description,

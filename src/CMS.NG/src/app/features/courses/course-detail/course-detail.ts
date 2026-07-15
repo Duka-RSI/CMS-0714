@@ -9,11 +9,12 @@ import { MessageService } from 'primeng/api';
 import { Course } from '@app/core/models/course.model';
 import { CourseService } from '@app/core/services/course.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 import { CourseQrCode } from '../course-qr-code/course-qr-code';
 
 @Component({
   selector: 'app-course-detail',
-  imports: [CommonModule, ButtonModule, TagModule, CourseQrCode],
+  imports: [CommonModule, ButtonModule, TagModule, CourseQrCode, RowAuditBadge],
   templateUrl: './course-detail.html',
   styleUrl: './course-detail.scss',
 })

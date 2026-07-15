@@ -15,6 +15,7 @@ import { AppRoleRequest } from '@app/core/models/app-role.model';
 import { AppUserLookup } from '@app/core/models/app-user-lookup.model';
 import { AppRoleService } from '@app/core/services/app-role.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 
 interface UserOption {
   userId: string;
@@ -31,6 +32,7 @@ interface UserOption {
     InputNumberModule,
     MultiSelectModule,
     MessageModule,
+    RowAuditBadge,
   ],
   templateUrl: './app-role-form.html',
   styleUrl: './app-role-form.scss',
@@ -47,6 +49,9 @@ export class AppRoleForm implements OnInit {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly userOptions = signal<UserOption[]>([]);
+  // The IDENTITY surrogate the audit rows key on (RoleId is the business PK, but RowAudit
+  // stores pkid). The form does not carry it, so it is kept here for the history badge.
+  protected readonly recordPkid = signal<number>(0);
 
   protected readonly form = this.fb.group({
     roleId: this.fb.control('', { validators: [Validators.required, Validators.maxLength(200)] }),
@@ -68,6 +73,7 @@ export class AppRoleForm implements OnInit {
       next: ({ users, role }) => {
         this.userOptions.set(this.toOptions(users));
         if (role) {
+          this.recordPkid.set(role.pkid);
           this.form.patchValue({
             roleId: role.roleId,
             roleName: role.roleName,

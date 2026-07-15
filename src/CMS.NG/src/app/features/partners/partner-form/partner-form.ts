@@ -11,6 +11,7 @@ import { MessageService } from 'primeng/api';
 
 import { PartnerRequest } from '@app/core/models/partner.model';
 import { PartnerService } from '@app/core/services/partner.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-partner-form',
@@ -21,6 +22,7 @@ import { PartnerService } from '@app/core/services/partner.service';
     InputTextModule,
     InputNumberModule,
     MessageModule,
+    RowAuditBadge,
   ],
   templateUrl: './partner-form.html',
   styleUrl: './partner-form.scss',
@@ -35,6 +37,8 @@ export class PartnerForm implements OnInit {
   protected readonly isEdit = signal(false);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+  // pkid the audit rows key on; captured for the history badge as a plain signal read.
+  protected readonly recordPkid = signal<number>(0);
 
   // pkid is IDENTITY: hidden in add mode, shown disabled in edit mode.
   protected readonly form = this.fb.group({
@@ -58,6 +62,7 @@ export class PartnerForm implements OnInit {
     if (id) {
       this.service.getById(Number(id)).subscribe({
         next: (partner) => {
+          this.recordPkid.set(partner.pkid);
           this.form.patchValue({
             pkid: partner.pkid,
             name: partner.name,

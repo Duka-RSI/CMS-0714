@@ -21,6 +21,7 @@ import {
 import { PromotionLookup } from '@app/core/models/promotion-lookup.model';
 import { FeaturedPromoItemService } from '@app/core/services/featured-promo-item.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 
 /** The values Copy puts on the board's clipboard and Paste seeds a new form with. */
 export interface FeaturedPromoItemSeed {
@@ -47,6 +48,7 @@ export interface FeaturedPromoItemSeed {
     ButtonModule,
     InputTextModule,
     MessageModule,
+    RowAuditBadge,
   ],
   templateUrl: './featured-promo-item-form.html',
   styleUrl: './featured-promo-item-form.scss',
@@ -71,6 +73,9 @@ export class FeaturedPromoItemForm implements OnInit {
   protected readonly saving = signal(false);
   protected readonly suggestions = signal<PromotionLookup[]>([]);
   protected readonly isEdit = computed(() => this.item() !== null);
+  // Exposed for the audit badge under its own name: the template has a `#item` autocomplete
+  // ng-template that shadows the `item` input, so `item()` is not reachable from the markup.
+  protected readonly recordPkid = computed(() => this.item()?.pkid ?? 0);
 
   /** Set once a PromoCode resolves to a real Promotion2 row; cleared when it is retyped. */
   private readonly promotionPkid = signal<number | null>(null);

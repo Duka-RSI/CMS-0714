@@ -35,4 +35,23 @@ public sealed class RowAuditRepository : IRowAuditRepository
               VALUES (@TableName, @UserName, @PrimaryKeyValues, @ActionType, @ActionDesc, @DateTime)",
             parameters, cancellationToken: cancellationToken));
     }
+
+    public async Task<IEnumerable<RowAuditHistoryItem>> GetHistoryAsync(
+        string tableName, string primaryKeyValues, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+
+        // Newest first; pkid is the IDENTITY tiebreaker so rows sharing a DateTime tick
+        // (datetime resolves to ~3.33ms) still order by the sequence they were written.
+        var parameters = new DynamicParameters();
+        parameters.Add("TableName", tableName, DbType.AnsiString, size: 50);
+        parameters.Add("PrimaryKeyValues", primaryKeyValues, DbType.String, size: 100);
+
+        return await connection.QueryAsync<RowAuditHistoryItem>(new CommandDefinition(
+            @"SELECT [DateTime], UserName, ActionType, ActionDesc
+              FROM RowAudit
+              WHERE TableName = @TableName AND PrimaryKeyValues = @PrimaryKeyValues
+              ORDER BY [DateTime] DESC, pkid DESC",
+            parameters, cancellationToken: cancellationToken));
+    }
 }

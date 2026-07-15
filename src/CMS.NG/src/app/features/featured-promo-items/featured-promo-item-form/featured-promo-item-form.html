@@ -54,6 +54,9 @@
   </div>
 
   <div class="form-actions">
+    @if (isEdit()) {
+      <app-row-audit-badge tableName="FeaturedPromoItem" [pkid]="recordPkid()" />
+    }
     <p-button
       type="button"
       label="取消"

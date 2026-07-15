@@ -16,6 +16,7 @@ import { AppRoleLookup } from '@app/core/models/app-role-lookup.model';
 import { AppUserService } from '@app/core/services/app-user.service';
 import { AuthService } from '@app/core/services/auth.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 
 interface RoleOption {
   roleId: string;
@@ -32,6 +33,7 @@ interface RoleOption {
     MultiSelectModule,
     ToggleSwitchModule,
     MessageModule,
+    RowAuditBadge,
   ],
   templateUrl: './app-user-form.html',
   styleUrl: './app-user-form.scss',
@@ -51,6 +53,9 @@ export class AppUserForm implements OnInit {
   protected readonly saving = signal(false);
   protected readonly resettingPassword = signal(false);
   protected readonly roleOptions = signal<RoleOption[]>([]);
+  // The IDENTITY surrogate the audit rows key on (UserId is the business PK, but RowAudit
+  // stores pkid). The form does not carry it, so it is kept here for the history badge.
+  protected readonly recordPkid = signal<number>(0);
 
   /**
    * Reset-to-default is Admin-only and needs an existing user, so it is hidden in add mode.
@@ -80,6 +85,7 @@ export class AppUserForm implements OnInit {
       next: ({ roles, user }) => {
         this.roleOptions.set(this.toOptions(roles));
         if (user) {
+          this.recordPkid.set(user.pkid);
           this.form.patchValue({
             userId: user.userId,
             userName: user.userName,

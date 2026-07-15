@@ -94,7 +94,7 @@
           <th pSortableColumn="canRepeat" style="width: 7rem" class="text-center">
             允許重聽 <p-sortIcon field="canRepeat" />
           </th>
-          <th style="width: 9rem" class="text-center">操作</th>
+          <th style="width: 11.5rem" class="text-center">操作</th>
         </tr>
       </ng-template>
 
@@ -361,6 +361,8 @@
             }
           </td>
           <td class="text-center">
+            <!-- compact: fetches only when clicked, so N rows add zero requests on load. -->
+            <app-row-audit-badge [compact]="true" tableName="Course" [pkid]="course.pkid" />
             <p-button
               icon="pi pi-eye"
               severity="secondary"

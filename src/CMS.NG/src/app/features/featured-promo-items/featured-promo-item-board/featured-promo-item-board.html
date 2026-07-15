@@ -98,6 +98,12 @@
                   />
 
                   @if (cell.item) {
+                    <!-- compact: fetches only when clicked, so the board adds no requests on load. -->
+                    <app-row-audit-badge
+                      [compact]="true"
+                      tableName="FeaturedPromoItem"
+                      [pkid]="cell.item.pkid"
+                    />
                     <p-button
                       icon="pi pi-copy"
                       severity="secondary"

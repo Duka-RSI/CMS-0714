@@ -10,10 +10,11 @@ import { MessageService } from 'primeng/api';
 
 import { CourseGroupRequest } from '@app/core/models/course-group.model';
 import { CourseGroupService } from '@app/core/services/course-group.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-course-group-form',
-  imports: [CommonModule, ReactiveFormsModule, ButtonModule, InputTextModule, MessageModule],
+  imports: [CommonModule, ReactiveFormsModule, ButtonModule, InputTextModule, MessageModule, RowAuditBadge],
   templateUrl: './course-group-form.html',
   styleUrl: './course-group-form.scss',
 })

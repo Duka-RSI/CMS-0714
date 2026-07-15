@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of } from 'rxjs';
 import { MessageService } from 'primeng/api';
 
@@ -34,6 +36,8 @@ describe('PartnerDetail', () => {
         MessageService,
         provideRouter([]),
         provideNoopAnimations(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         // Must come after provideRouter() so this mock wins over the router's ActivatedRoute.
         {
           provide: ActivatedRoute,

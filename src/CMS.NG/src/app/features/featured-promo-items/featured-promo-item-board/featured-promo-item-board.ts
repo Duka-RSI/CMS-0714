@@ -9,6 +9,7 @@ import { FeaturedPromoItem } from '@app/core/models/featured-promo-item.model';
 import { TrainingCenterLookup } from '@app/core/models/training-center-lookup.model';
 import { FeaturedPromoItemService } from '@app/core/services/featured-promo-item.service';
 import { LookupService } from '@app/core/services/lookup.service';
+import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 import {
   addDays,
   formatDayLabel,
@@ -56,7 +57,7 @@ interface EditTarget {
  */
 @Component({
   selector: 'app-featured-promo-item-board',
-  imports: [CommonModule, TabsModule, ButtonModule, TooltipModule, FeaturedPromoItemForm],
+  imports: [CommonModule, TabsModule, ButtonModule, TooltipModule, FeaturedPromoItemForm, RowAuditBadge],
   templateUrl: './featured-promo-item-board.html',
   styleUrl: './featured-promo-item-board.scss',
 })
