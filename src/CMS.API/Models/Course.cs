@@ -1,3 +1,5 @@
+using CMS.API.Auditing;
+
 namespace CMS.API.Models;
 
 /// <summary>
@@ -41,18 +43,23 @@ public class Course
     public bool CanRepeat { get; set; }
 
     /// <summary>Joined from Partner (原廠).</summary>
+    [NotAudited]
     public string PartnerName { get; set; } = string.Empty;
 
     /// <summary>Joined from CourseGroup (課程群組). Null when <see cref="CourseGroupPkid"/> is null.</summary>
+    [NotAudited]
     public string? CourseGroupDescription { get; set; }
 
     /// <summary>Joined from PublishStatus (上架狀態).</summary>
+    [NotAudited]
     public string PublishStatusDescription { get; set; } = string.Empty;
 
     /// <summary>Number of CourseInCertification rows ("認證數"). Subquery count.</summary>
+    [NotAudited]
     public int CertificationCount { get; set; }
 
     /// <summary>Number of CourseJobCategories rows ("職務類別數"). Subquery count.</summary>
+    [NotAudited]
     public int JobCategoryCount { get; set; }
 
     /// <summary>N-N (CourseInCertification). Populated only on GET-by-id.</summary>

@@ -1,3 +1,5 @@
+using CMS.API.Auditing;
+
 namespace CMS.API.Models;
 
 /// <summary>
@@ -9,8 +11,10 @@ public class CourseGroup
     public string Description { get; set; } = string.Empty;
 
     /// <summary>Number of Course rows in this group ("課程數"). Subquery count.</summary>
+    [NotAudited]
     public int CourseCount { get; set; }
 
     /// <summary>Number of PartnerCourseGroup rows referencing this group ("廠商群組數"). Subquery count.</summary>
+    [NotAudited]
     public int PartnerCourseGroupCount { get; set; }
 }

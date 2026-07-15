@@ -1,4 +1,5 @@
 using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -7,11 +8,15 @@ namespace CMS.API.Repositories;
 
 public sealed class FeaturedPromoItemRepository : IFeaturedPromoItemRepository
 {
-    private readonly IDbConnectionFactory _connectionFactory;
+    private const string AuditTableName = "FeaturedPromoItem";
 
-    public FeaturedPromoItemRepository(IDbConnectionFactory connectionFactory)
+    private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IRowAuditWriter _rowAudit;
+
+    public FeaturedPromoItemRepository(IDbConnectionFactory connectionFactory, IRowAuditWriter rowAudit)
     {
         _connectionFactory = connectionFactory;
+        _rowAudit = rowAudit;
     }
 
     /// <summary>
@@ -104,12 +109,21 @@ public sealed class FeaturedPromoItemRepository : IFeaturedPromoItemRepository
             request, cancellationToken: cancellationToken));
 
         var created = await GetByIdAsync(connection, null, newPkid, cancellationToken);
+        await _rowAudit.LogInsertAsync(AuditTableName, created!, cancellationToken);
         return created!;
     }
 
     public async Task<bool> UpdateAsync(FeaturedPromoItemRequest request, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+
+        // Snapshot for the audit diff. A missing row means the UPDATE would have affected
+        // nothing anyway, so the early return matches the previous behaviour.
+        var before = await GetByIdAsync(connection, null, request.Pkid, cancellationToken);
+        if (before is null)
+        {
+            return false;
+        }
 
         // pkid is the immutable primary key — never updated.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
@@ -119,16 +133,38 @@ public sealed class FeaturedPromoItemRepository : IFeaturedPromoItemRepository
               WHERE pkid = @Pkid",
             request, cancellationToken: cancellationToken));
 
-        return affected > 0;
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        var after = await GetByIdAsync(connection, null, request.Pkid, cancellationToken);
+        await _rowAudit.LogUpdateAsync(AuditTableName, before, after!, cancellationToken);
+        return true;
     }
 
     public async Task<bool> DeleteAsync(int pkid, CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+
+        // Read the row before it goes: ActionDesc is its Topic.
+        var deleted = await GetByIdAsync(connection, null, pkid, cancellationToken);
+        if (deleted is null)
+        {
+            return false;
+        }
+
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM FeaturedPromoItem WHERE pkid = @Pkid",
             new { Pkid = pkid }, cancellationToken: cancellationToken));
-        return affected > 0;
+
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        await _rowAudit.LogDeleteAsync(AuditTableName, deleted, cancellationToken);
+        return true;
     }
 
     public async Task<bool> MoveSlotAsync(SlotMoveRequest request, CancellationToken cancellationToken = default)
@@ -162,6 +198,12 @@ public sealed class FeaturedPromoItemRepository : IFeaturedPromoItemRepository
             },
             transaction, cancellationToken: cancellationToken));
 
+        // The occupant is a second row this operation changes, so it is snapshotted and
+        // audited in its own right.
+        var occupantBefore = occupantPkid is null
+            ? null
+            : await GetByIdAsync(connection, transaction, occupantPkid.Value, cancellationToken);
+
         if (occupantPkid is not null)
         {
             // Three steps: the UNIQUE index over (ScheduleOn, TrainingCenter_pkid, Slot)
@@ -175,7 +217,22 @@ public sealed class FeaturedPromoItemRepository : IFeaturedPromoItemRepository
             await SetSlotAsync(connection, transaction, moving.Pkid, request.TargetSlot, cancellationToken);
         }
 
+        var movingAfter = await GetByIdAsync(connection, transaction, moving.Pkid, cancellationToken);
+        var occupantAfter = occupantPkid is null
+            ? null
+            : await GetByIdAsync(connection, transaction, occupantPkid.Value, cancellationToken);
+
         transaction.Commit();
+
+        // A swap moves two rows, so it writes two audit rows — the parking slot is an
+        // implementation detail of the exchange and never appears, because the diff only
+        // compares the committed before and after.
+        await _rowAudit.LogUpdateAsync(AuditTableName, moving, movingAfter!, cancellationToken);
+        if (occupantBefore is not null && occupantAfter is not null)
+        {
+            await _rowAudit.LogUpdateAsync(AuditTableName, occupantBefore, occupantAfter, cancellationToken);
+        }
+
         return true;
     }
 

@@ -1,4 +1,5 @@
 using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -7,11 +8,15 @@ namespace CMS.API.Repositories;
 
 public sealed class CourseRepository : ICourseRepository
 {
-    private readonly IDbConnectionFactory _connectionFactory;
+    private const string AuditTableName = "Course";
 
-    public CourseRepository(IDbConnectionFactory connectionFactory)
+    private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IRowAuditWriter _rowAudit;
+
+    public CourseRepository(IDbConnectionFactory connectionFactory, IRowAuditWriter rowAudit)
     {
         _connectionFactory = connectionFactory;
+        _rowAudit = rowAudit;
     }
 
     // FK columns are Partner_pkid etc. — aliased to the model's property names because
@@ -139,6 +144,10 @@ public sealed class CourseRepository : ICourseRepository
 
         var created = await GetByIdAsync(connection, transaction, newPkid, cancellationToken);
         transaction.Commit();
+
+        // Audited after the commit: the row is durable, and a failed audit write must not
+        // take a committed change down with it.
+        await _rowAudit.LogInsertAsync(AuditTableName, created!, cancellationToken);
         return created!;
     }
 
@@ -146,6 +155,15 @@ public sealed class CourseRepository : ICourseRepository
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
+
+        // Both snapshots are read inside the transaction, so the diff cannot straddle
+        // somebody else's concurrent edit.
+        var before = await GetByIdAsync(connection, transaction, request.Pkid, cancellationToken);
+        if (before is null)
+        {
+            transaction.Rollback();
+            return false;
+        }
 
         // pkid is the immutable primary key — never updated.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
@@ -171,7 +189,10 @@ public sealed class CourseRepository : ICourseRepository
         await SyncCertificationsAsync(connection, transaction, request.Pkid, request.CertificationPkids, cancellationToken);
         await SyncJobCategoriesAsync(connection, transaction, request.Pkid, request.JobCategoryPkids, cancellationToken);
 
+        var after = await GetByIdAsync(connection, transaction, request.Pkid, cancellationToken);
         transaction.Commit();
+
+        await _rowAudit.LogUpdateAsync(AuditTableName, before, after!, cancellationToken);
         return true;
     }
 
@@ -180,11 +201,11 @@ public sealed class CourseRepository : ICourseRepository
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
 
-        var exists = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-            "SELECT COUNT(1) FROM Course WHERE pkid = @Pkid",
-            new { Pkid = pkid }, transaction, cancellationToken: cancellationToken));
+        // Doubles as the existence check the COUNT(1) used to do, and as the row the audit
+        // entry describes once it is gone.
+        var deleted = await GetByIdAsync(connection, transaction, pkid, cancellationToken);
 
-        if (exists == 0)
+        if (deleted is null)
         {
             transaction.Rollback();
             return new CourseDeleteResult(false, NotFound: true, default);
@@ -219,7 +240,16 @@ public sealed class CourseRepository : ICourseRepository
             new { Pkid = pkid }, transaction, cancellationToken: cancellationToken));
 
         transaction.Commit();
-        return new CourseDeleteResult(affected > 0, NotFound: false, default);
+
+        // Only a delete that actually happened is audited — a blocked or not-found one
+        // returned above without reaching this line.
+        if (affected == 0)
+        {
+            return new CourseDeleteResult(false, NotFound: false, default);
+        }
+
+        await _rowAudit.LogDeleteAsync(AuditTableName, deleted, cancellationToken);
+        return new CourseDeleteResult(true, NotFound: false, default);
     }
 
     // N-N sync: delete-then-reinsert on the same connection/transaction (AppRole pattern).

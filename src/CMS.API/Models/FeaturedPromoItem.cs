@@ -1,3 +1,5 @@
+using CMS.API.Auditing;
+
 namespace CMS.API.Models;
 
 /// <summary>
@@ -17,5 +19,6 @@ public class FeaturedPromoItem
     public string Description { get; set; } = string.Empty;
 
     /// <summary>Joined from Promotion2 — the code the board shows and the form edits.</summary>
+    [NotAudited]
     public string PromoCode { get; set; } = string.Empty;
 }

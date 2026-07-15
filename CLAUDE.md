@@ -54,14 +54,29 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
 
 | Doc | Covers |
 |-----|--------|
-| `spec/backend-conventions.md` | Dapper repo/model/controller patterns; the three PK types; lookup endpoints; nchar/date; N-N; no-RowAudit |
+| `spec/backend-conventions.md` | Dapper repo/model/controller patterns; the three PK types; lookup endpoints; nchar/date; N-N; row auditing |
 | `spec/frontend-conventions.md` | standalone component + service + list/detail/form; form PK handling; bit columns; in-place list editing; routing; sidebar; bundle budgets |
 | `spec/reference-features.md` | worked features and their quirks; deferred FK-link buttons; the "adding a feature" workflow |
 | `spec/auth/Authorization.md` | **read before any auth work** — the JWT pipeline, role policies, NG login/guard/interceptors, the password policy, and the traps that fail *silently* |
 | `spec/auth/Login.md` | the login endpoint: credential check, JWT claims/lifetime, the SysConfig signing secret |
 | `spec/auth/AppUser.md` | the AppUser feature: password storage, reset-to-default, the N-N with AppRole |
+| `spec/admin/RowAudit.md` | **read before adding a feature or touching a repository write** — the RowAudit writer, `[NotAudited]`, the before/after snapshot rule, the varchar byte budget |
 | `spec/code-gen.convention.md` | terse code-gen checklist |
 | `spec/feature-spec.template.md` | spec sections to fill when analysing a table |
+
+## gstack
+
+Use the `/browse` skill from gstack (installed at `~/.claude/skills/gstack`) for **all**
+web browsing. Never use the `mcp__claude-in-chrome__*` tools.
+
+Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`,
+`/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`,
+`/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`,
+`/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`,
+`/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`,
+`/document-generate`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`,
+`/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`,
+`/learn`.
 
 ## Gotchas
 
@@ -75,7 +90,10 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
 - **Update endpoints sync N-N sets from the request** — never build a PUT from a list row
   (its N-N pkid arrays are empty; they load on GET-by-id only). Fetch the full record, merge,
   then PUT, or the links are silently wiped.
-- **No RowAudit infrastructure exists** despite the `/crud` skill mentioning it — don't add
-  audit logging.
+- **Every repository write is audited** via `IRowAuditWriter` — a new feature must call it
+  too, and must mark its JOINed labels / subquery counts `[NotAudited]` or they get logged
+  as if they were edits (fails *silently*). `ActionDesc` is `varchar(1000)` under a Chinese
+  collation: **1000 bytes = 500 中文 characters**. See `spec/admin/RowAudit.md`. Nothing
+  reads RowAudit back yet, and the `/crud` skill's audit *badge* component doesn't exist.
 - **`.claude/` is untracked local tooling** — keep it out of commits; never `git add -A`
   blindly.

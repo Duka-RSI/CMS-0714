@@ -41,7 +41,11 @@ worked examples to mirror, and `frontend-conventions.md` for the Angular side.
   are already registered globally in `Program.cs` (`Data/DapperTypeHandlers.cs`).
 - **N-N**: delete-then-reinsert inside a transaction on save; separate query to
   read the child id list on GET-by-id. See `AppRoleRepository.SyncUsersAsync`.
-- **No RowAudit** — despite the `/crud` skill's instructions, there is no
-  `RowAuditWriter`, audit table, or badge component. Repositories do **no** audit
-  logging. Do not add it.
+- **Row auditing**: every repository takes `IRowAuditWriter` and logs after each successful
+  Create/Update/Delete — **a new feature must too**. Read `spec/admin/RowAudit.md` first.
+  The three rules that bite: snapshot before/after **inside** the transaction but write the
+  audit row **after** `Commit()`; mark JOINed labels and subquery counts `[NotAudited]` on
+  the model; `ActionDesc` is `varchar` under a Chinese collation, so its 1000 is **bytes,
+  not characters**. Nothing reads RowAudit back, and there is still no audit badge
+  component despite the `/crud` skill.
 - CORS allows any loopback origin; Swagger UI is at `/swagger`.

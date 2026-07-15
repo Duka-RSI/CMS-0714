@@ -1,3 +1,4 @@
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -6,11 +7,15 @@ namespace CMS.API.Repositories;
 
 public sealed class PartnerRepository : IPartnerRepository
 {
-    private readonly IDbConnectionFactory _connectionFactory;
+    private const string AuditTableName = "Partner";
 
-    public PartnerRepository(IDbConnectionFactory connectionFactory)
+    private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IRowAuditWriter _rowAudit;
+
+    public PartnerRepository(IDbConnectionFactory connectionFactory, IRowAuditWriter rowAudit)
     {
         _connectionFactory = connectionFactory;
+        _rowAudit = rowAudit;
     }
 
     private const string SelectColumns = @"
@@ -64,11 +69,20 @@ public sealed class PartnerRepository : IPartnerRepository
             request, cancellationToken: cancellationToken));
 
         var created = await GetByIdAsync(newPkid, cancellationToken);
+        await _rowAudit.LogInsertAsync(AuditTableName, created!, cancellationToken);
         return created!;
     }
 
     public async Task<bool> UpdateAsync(PartnerRequest request, CancellationToken cancellationToken = default)
     {
+        // Snapshot for the audit diff. A missing row means the UPDATE would have affected
+        // nothing anyway, so the early return matches the previous behaviour.
+        var before = await GetByIdAsync(request.Pkid, cancellationToken);
+        if (before is null)
+        {
+            return false;
+        }
+
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
 
         // pkid is the immutable primary key — never updated.
@@ -80,15 +94,36 @@ public sealed class PartnerRepository : IPartnerRepository
               WHERE pkid = @Pkid",
             request, cancellationToken: cancellationToken));
 
-        return affected > 0;
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        var after = await GetByIdAsync(request.Pkid, cancellationToken);
+        await _rowAudit.LogUpdateAsync(AuditTableName, before, after!, cancellationToken);
+        return true;
     }
 
     public async Task<bool> DeleteAsync(short pkid, CancellationToken cancellationToken = default)
     {
+        // Read the row before it goes: ActionDesc is its Name.
+        var deleted = await GetByIdAsync(pkid, cancellationToken);
+        if (deleted is null)
+        {
+            return false;
+        }
+
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         var affected = await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM Partner WHERE pkid = @Pkid",
             new { Pkid = pkid }, cancellationToken: cancellationToken));
-        return affected > 0;
+
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        await _rowAudit.LogDeleteAsync(AuditTableName, deleted, cancellationToken);
+        return true;
     }
 }

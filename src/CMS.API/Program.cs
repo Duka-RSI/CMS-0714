@@ -1,3 +1,4 @@
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Repositories;
 using CMS.API.Security;
@@ -58,6 +59,12 @@ builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IFeaturedPromoItemRepository, FeaturedPromoItemRepository>();
 builder.Services.AddScoped<ILookupRepository, LookupRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<IRowAuditRepository, RowAuditRepository>();
+
+// Row auditing — RowAuditWriter reads the caller off the current request's token, so it
+// needs the HttpContext accessor. No repository calls it yet.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IRowAuditWriter, RowAuditWriter>();
 
 // Login / token issuing
 builder.Services.AddSingleton(TimeProvider.System);

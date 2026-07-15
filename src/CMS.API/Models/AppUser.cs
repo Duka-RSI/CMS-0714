@@ -1,3 +1,5 @@
+using CMS.API.Auditing;
+
 namespace CMS.API.Models;
 
 /// <summary>
@@ -18,6 +20,7 @@ public class AppUser
     public DateTime? PasswordUpdatedTime { get; set; }
 
     /// <summary>Number of AppUserRole rows referencing this user ("角色數"). Subquery count.</summary>
+    [NotAudited]
     public int RoleCount { get; set; }
 
     /// <summary>Assigned roles (AppRole.RoleId). Populated only on GET-by-id.</summary>

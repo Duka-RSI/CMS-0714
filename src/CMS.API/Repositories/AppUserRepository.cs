@@ -1,4 +1,5 @@
 using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using CMS.API.Security;
@@ -8,13 +9,20 @@ namespace CMS.API.Repositories;
 
 public sealed class AppUserRepository : IAppUserRepository
 {
+    private const string AuditTableName = "AppUser";
+
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly ISysConfigRepository _sysConfigRepository;
+    private readonly IRowAuditWriter _rowAudit;
 
-    public AppUserRepository(IDbConnectionFactory connectionFactory, ISysConfigRepository sysConfigRepository)
+    public AppUserRepository(
+        IDbConnectionFactory connectionFactory,
+        ISysConfigRepository sysConfigRepository,
+        IRowAuditWriter rowAudit)
     {
         _connectionFactory = connectionFactory;
         _sysConfigRepository = sysConfigRepository;
+        _rowAudit = rowAudit;
     }
 
     // Base projection. PasswordHash is deliberately never selected — it must not leave the DB.
@@ -93,6 +101,11 @@ public sealed class AppUserRepository : IAppUserRepository
 
         var created = await GetByIdAsync(connection, transaction, request.UserId, cancellationToken);
         transaction.Commit();
+
+        // Audited after the commit: the row is durable, and a failed audit write must not
+        // take a committed change down with it. The AppUser projection carries no
+        // PasswordHash, so the hash assigned above cannot reach the audit row.
+        await _rowAudit.LogInsertAsync(AuditTableName, created!, cancellationToken);
         return created!;
     }
 
@@ -100,6 +113,15 @@ public sealed class AppUserRepository : IAppUserRepository
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
+
+        // Both snapshots are read inside the transaction, so the diff cannot straddle
+        // somebody else's concurrent edit.
+        var before = await GetByIdAsync(connection, transaction, request.UserId, cancellationToken);
+        if (before is null)
+        {
+            transaction.Rollback();
+            return false;
+        }
 
         // UserId is the immutable primary key — never updated.
         // PasswordHash / PasswordUpdatedTime are deliberately absent: an edit must never
@@ -118,7 +140,10 @@ public sealed class AppUserRepository : IAppUserRepository
         }
 
         await SyncRolesAsync(connection, transaction, request.UserId, request.RoleIds, cancellationToken);
+        var after = await GetByIdAsync(connection, transaction, request.UserId, cancellationToken);
         transaction.Commit();
+
+        await _rowAudit.LogUpdateAsync(AuditTableName, before, after!, cancellationToken);
         return true;
     }
 
@@ -126,6 +151,14 @@ public sealed class AppUserRepository : IAppUserRepository
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
+
+        // Read the row before it goes: ActionDesc is its UserId.
+        var deleted = await GetByIdAsync(connection, transaction, userId, cancellationToken);
+        if (deleted is null)
+        {
+            transaction.Rollback();
+            return false;
+        }
 
         await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM AppUserRole WHERE UserId = @UserId",
@@ -136,7 +169,14 @@ public sealed class AppUserRepository : IAppUserRepository
             new { UserId = userId }, transaction, cancellationToken: cancellationToken));
 
         transaction.Commit();
-        return affected > 0;
+
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        await _rowAudit.LogDeleteAsync(AuditTableName, deleted, cancellationToken);
+        return true;
     }
 
     public async Task<bool> ExistsAsync(string userId, CancellationToken cancellationToken = default)
@@ -150,7 +190,17 @@ public sealed class AppUserRepository : IAppUserRepository
 
     public async Task<bool> ResetPasswordAsync(string userId, CancellationToken cancellationToken = default)
     {
+        // Hashed first, as before: a SysConfig without a default password must still throw
+        // rather than quietly do nothing.
         var passwordHash = await HashDefaultPasswordAsync(cancellationToken);
+
+        // Snapshot for the audit diff. The AppUser projection has no PasswordHash, so the
+        // audit row records only that PasswordUpdatedTime moved — never the hash itself.
+        var before = await GetByIdAsync(userId, cancellationToken);
+        if (before is null)
+        {
+            return false;
+        }
 
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         var affected = await connection.ExecuteAsync(new CommandDefinition(
@@ -158,7 +208,15 @@ public sealed class AppUserRepository : IAppUserRepository
               SET PasswordHash = @PasswordHash, PasswordUpdatedTime = GETUTCDATE()
               WHERE UserId = @UserId",
             new { UserId = userId, PasswordHash = passwordHash }, cancellationToken: cancellationToken));
-        return affected > 0;
+
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        var after = await GetByIdAsync(userId, cancellationToken);
+        await _rowAudit.LogUpdateAsync(AuditTableName, before, after!, cancellationToken);
+        return true;
     }
 
     /// <summary>Reads the SysConfig default password and hashes it for storage.</summary>

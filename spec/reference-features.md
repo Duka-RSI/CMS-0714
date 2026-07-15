@@ -22,8 +22,9 @@ that aren't derivable from the schema alone. Pair with `backend-conventions.md` 
 - **`AppRole ↔ AppUser` is N-N** via `AppUserRole` (junction on the string keys
   `RoleId`/`UserId`). The request carries `UserIds: string[]`; `使用者數` (UserCount)
   is a correlated subquery.
-- **Partner / PublishStatus / CourseGroup** carry no audit logging and no
-  primary-foreign nav buttons (see below).
+- **Partner / PublishStatus / CourseGroup** carry no primary-foreign nav buttons (see
+  below). Like every feature, their repositories **do** audit their writes
+  (`spec/admin/RowAudit.md`).
 
 ## Primary-Foreign link buttons are deferred
 
