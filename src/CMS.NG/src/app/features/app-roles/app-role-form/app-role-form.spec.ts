@@ -60,6 +60,19 @@ function setup(routeId: string | null) {
   return { fixture, component, roleService, lookupService };
 }
 
+// The toolbar must stay pinned (position: sticky) so 儲存/取消 remain reachable on long forms.
+function expectStickyToolbar(fixture: ComponentFixture<AppRoleForm>): void {
+  const header = (fixture.nativeElement as HTMLElement).querySelector('.page-header')!;
+  const style = getComputedStyle(header);
+  expect(style.position).toBe('sticky');
+  expect(style.top).toBe('-20px');
+  const labels = Array.from(header.querySelectorAll('.actions button')).map(
+    (b) => b.textContent?.trim() ?? '',
+  );
+  expect(labels).toContain('取消');
+  expect(labels).toContain('儲存');
+}
+
 describe('AppRoleForm (add mode)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
@@ -114,6 +127,11 @@ describe('AppRoleForm (add mode)', () => {
     const msg = addSpy.calls.mostRecent().args[0];
     expect(msg.detail).toContain('已存在');
   });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup(null);
+    expectStickyToolbar(fixture);
+  });
 });
 
 describe('AppRoleForm (edit mode)', () => {
@@ -141,5 +159,10 @@ describe('AppRoleForm (edit mode)', () => {
     expect(arg.roleId).toBe('Admin');
     expect(arg.roleName).toBe('Administrator (edited)');
     expect(navSpy).toHaveBeenCalledWith(['/app-roles']);
+  });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup('Admin');
+    expectStickyToolbar(fixture);
   });
 });

@@ -49,6 +49,19 @@ function setup(routeId: string | null) {
   return { fixture, component, service };
 }
 
+// The toolbar must stay pinned (position: sticky) so 儲存/取消 remain reachable on long forms.
+function expectStickyToolbar(fixture: ComponentFixture<PartnerForm>): void {
+  const header = (fixture.nativeElement as HTMLElement).querySelector('.page-header')!;
+  const style = getComputedStyle(header);
+  expect(style.position).toBe('sticky');
+  expect(style.top).toBe('-20px');
+  const labels = Array.from(header.querySelectorAll('.actions button')).map(
+    (b) => b.textContent?.trim() ?? '',
+  );
+  expect(labels).toContain('取消');
+  expect(labels).toContain('儲存');
+}
+
 describe('PartnerForm (add mode)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
@@ -85,6 +98,11 @@ describe('PartnerForm (add mode)', () => {
     expect(arg.pkid).toBe(0); // IDENTITY placeholder in add mode
     expect(navSpy).toHaveBeenCalledWith(['/partners']);
   });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup(null);
+    expectStickyToolbar(fixture);
+  });
 });
 
 describe('PartnerForm (edit mode)', () => {
@@ -111,5 +129,10 @@ describe('PartnerForm (edit mode)', () => {
     expect(arg.pkid).toBe(2);
     expect(arg.name).toBe('Oracle (edited)');
     expect(navSpy).toHaveBeenCalledWith(['/partners']);
+  });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup('2');
+    expectStickyToolbar(fixture);
   });
 });

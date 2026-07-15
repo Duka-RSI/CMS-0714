@@ -106,6 +106,19 @@ function fillRequired(component: CourseForm): void {
   });
 }
 
+// The toolbar must stay pinned (position: sticky) so 儲存/取消 remain reachable on long forms.
+function expectStickyToolbar(fixture: ComponentFixture<CourseForm>): void {
+  const header = (fixture.nativeElement as HTMLElement).querySelector('.page-header')!;
+  const style = getComputedStyle(header);
+  expect(style.position).toBe('sticky');
+  expect(style.top).toBe('-20px');
+  const labels = Array.from(header.querySelectorAll('.actions button')).map(
+    (b) => b.textContent?.trim() ?? '',
+  );
+  expect(labels).toContain('取消');
+  expect(labels).toContain('儲存');
+}
+
 describe('CourseForm (add mode)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
@@ -178,6 +191,11 @@ describe('CourseForm (add mode)', () => {
     expect(arg.jobCategoryPkids).toEqual([7]);
     expect(navSpy).toHaveBeenCalledWith(['/courses']);
   });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup(null);
+    expectStickyToolbar(fixture);
+  });
 });
 
 describe('CourseForm (edit mode)', () => {
@@ -218,5 +236,10 @@ describe('CourseForm (edit mode)', () => {
     expect(arg.pkid).toBe(1);
     expect(arg.title).toBe('Azure 系統管理 (更新)');
     expect(navSpy).toHaveBeenCalledWith(['/courses']);
+  });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup('1');
+    expectStickyToolbar(fixture);
   });
 });

@@ -48,6 +48,19 @@ function setup(routeId: string | null) {
   return { fixture, component, service };
 }
 
+// The toolbar must stay pinned (position: sticky) so 儲存/取消 remain reachable on long forms.
+function expectStickyToolbar(fixture: ComponentFixture<PublishStatusForm>): void {
+  const header = (fixture.nativeElement as HTMLElement).querySelector('.page-header')!;
+  const style = getComputedStyle(header);
+  expect(style.position).toBe('sticky');
+  expect(style.top).toBe('-20px');
+  const labels = Array.from(header.querySelectorAll('.actions button')).map(
+    (b) => b.textContent?.trim() ?? '',
+  );
+  expect(labels).toContain('取消');
+  expect(labels).toContain('儲存');
+}
+
 describe('PublishStatusForm (add mode)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
@@ -98,6 +111,11 @@ describe('PublishStatusForm (add mode)', () => {
     const msg = addSpy.calls.mostRecent().args[0];
     expect(msg.detail).toContain('已存在');
   });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup(null);
+    expectStickyToolbar(fixture);
+  });
 });
 
 describe('PublishStatusForm (edit mode)', () => {
@@ -125,5 +143,10 @@ describe('PublishStatusForm (edit mode)', () => {
     expect(arg.pkid).toBe(2);
     expect(arg.description).toBe('已發布 (edited)');
     expect(navSpy).toHaveBeenCalledWith(['/publish-statuses']);
+  });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup('2');
+    expectStickyToolbar(fixture);
   });
 });
