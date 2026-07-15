@@ -58,6 +58,25 @@ Two rules hold everywhere:
   *not* in the transaction: the writer swallows its own failures, and a row that rolled back
   must never be audited as though it happened.
 
+> **Putting the audit INSERT inside the business transaction was considered and declined —
+> twice. Don't re-litigate it without reading this.** It sounds stricter, but it buys nothing
+> and costs plenty:
+>
+> - The goal it is usually proposed for — *"a rolled-back or failed change leaves no audit
+>   row"* — **already holds**. The audit call sits after a successful `Commit()`; every
+>   failure and rollback path returns before reaching it.
+> - It contradicts the decision that a failed audit must not fail the caller. Inside the
+>   transaction, a failed audit INSERT rolls back a save the user already completed.
+> - "Catch it and commit anyway" does not work: a SQL error dooms the transaction, so the
+>   commit fails too.
+> - `IRowAuditWriter` would have to take `(IDbConnection, IDbTransaction)`, so it could no
+>   longer open its own connection, and the non-transactional repositories (Partner,
+>   PublishStatus, CourseGroup, FeaturedPromoItem) would each need a transaction invented for
+>   them.
+>
+> The accepted trade is the reverse failure: a committed change whose audit write fails leaves
+> no audit row. That gap is logged as a warning and listed under Known gaps.
+
 A `Delete` reads the row first — it needs the entity for ActionDesc, and that read doubles as
 the existence check (`CourseRepository.DeleteAsync` dropped its `SELECT COUNT(1)` for it).
 `Course` deletes are audited only when one actually happened; not-found and child-row-blocked
@@ -185,8 +204,19 @@ that a repository failure and an HttpContext failure are both swallowed.
 ### Verified against the live database
 
 **The repository wiring is not covered by any test** — the suite mocks repositories at the
-controller level, so nothing in it executes a `LogInsertAsync` call site. It was verified by
-driving the real API (as a throwaway Admin user, artifacts cleaned up afterwards):
+controller level, so nothing in it executes a `LogInsertAsync` call site. A green suite says
+nothing about the wiring.
+
+It cannot be unit-tested as things stand: repositories run Dapper, whose async extensions
+require a real `DbConnection`, so a mocked `IDbConnectionFactory` cannot stand in for one.
+(That limitation is exactly why `IRowAuditRepository` exists as a seam — it is what makes the
+*writer* testable.) Adding a database-backed integration project was considered and declined:
+it would break the `never hits the DB` rule in CLAUDE.md and buy an automated regression net
+in exchange for state-dependent tests and a database to provision. Revisit if the wiring
+starts breaking in practice.
+
+So it was verified by driving the real API instead (as a throwaway Admin user, artifacts
+cleaned up afterwards):
 
 | Exercised | Resulting row |
 |-----------|---------------|
