@@ -285,9 +285,13 @@ On API `409` → toast error: 該群組仍被廠商課程群組引用，無法�
 
 ### Sidebar
 
-Add under nav group **課程管理 Course** — the group does not exist yet in `app.ts`;
-create it below 系統管理 Admin with item 課程群組 → `/course-groups`
-(icon suggestion: `pi pi-tags`).
+Add item 課程群組 CourseGroup → `/course-groups` (icon `pi pi-sitemap`) as a
+**level-3 child** of the 課程管理 Course collapsible group, which lives under the
+功能選單 section in `app.ts` (alongside 合作廠商 Partner).
+
+The sidebar supports three levels: section title (L1) → item (L2) → `item.children`
+(L3). Course features nest under the 課程管理 Course L2 group rather than getting
+their own L1 section — see [Partner.md](Partner.md) for the history.
 
 ---
 
