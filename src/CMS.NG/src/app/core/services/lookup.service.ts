@@ -7,6 +7,8 @@ import { AppRoleLookup } from '@app/core/models/app-role-lookup.model';
 import { PublishStatusLookup } from '@app/core/models/publish-status-lookup.model';
 import { PartnerLookup } from '@app/core/models/partner-lookup.model';
 import { CourseGroupLookup } from '@app/core/models/course-group-lookup.model';
+import { CertificationLookup } from '@app/core/models/certification-lookup.model';
+import { JobCategoryLookup } from '@app/core/models/job-category-lookup.model';
 import { TrainingCenterLookup } from '@app/core/models/training-center-lookup.model';
 import { PromotionLookup } from '@app/core/models/promotion-lookup.model';
 
@@ -34,6 +36,14 @@ export class LookupService {
 
   getCourseGroups(): Observable<CourseGroupLookup[]> {
     return this.http.get<CourseGroupLookup[]>(`${this.baseUrl}/course-groups`);
+  }
+
+  getCertifications(): Observable<CertificationLookup[]> {
+    return this.http.get<CertificationLookup[]>(`${this.baseUrl}/certifications`);
+  }
+
+  getJobCategories(): Observable<JobCategoryLookup[]> {
+    return this.http.get<JobCategoryLookup[]>(`${this.baseUrl}/job-categories`);
   }
 
   getTrainingCenters(): Observable<TrainingCenterLookup[]> {

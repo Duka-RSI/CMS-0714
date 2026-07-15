@@ -1,0 +1,170 @@
+<div class="page">
+  <div class="page-header">
+    <h1 class="title">檢視課程</h1>
+    <div class="actions">
+      <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="goBack()" />
+      <p-button label="編輯" icon="pi pi-pencil" (onClick)="goEdit()" />
+    </div>
+  </div>
+
+  @if (course(); as c) {
+    <div class="card">
+      <h2 class="section-title">課程資料</h2>
+      <dl class="detail-grid">
+        <dt>主代碼</dt>
+        <dd>{{ c.pkid }}</dd>
+
+        <dt>課程名稱</dt>
+        <dd>{{ c.title }}</dd>
+
+        <dt>官方名稱</dt>
+        <dd>{{ c.officialTitle || '—' }}</dd>
+
+        <dt>簡介代碼</dt>
+        <dd>{{ c.courseId }}</dd>
+
+        <dt>科目代碼</dt>
+        <dd>{{ c.prodCourseId }}</dd>
+
+        <dt>網址代稱</dt>
+        <dd>{{ c.friendlyUrl }}</dd>
+
+        <dt>顯示順序</dt>
+        <dd>{{ c.displayOrder }}</dd>
+
+        <!-- Foreign-primary links: all three parents have detail pages. -->
+        <dt>原廠</dt>
+        <dd>
+          <span class="fk-link">
+            {{ c.partnerName }}
+            <p-button
+              icon="pi pi-external-link"
+              severity="secondary"
+              [text]="true"
+              [rounded]="true"
+              size="small"
+              pTooltip="檢視合作廠商"
+              (onClick)="goPartner()"
+            />
+          </span>
+        </dd>
+
+        <dt>課程群組</dt>
+        <dd>
+          @if (c.courseGroupPkid != null) {
+            <span class="fk-link">
+              {{ c.courseGroupDescription }}
+              <p-button
+                icon="pi pi-external-link"
+                severity="secondary"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                pTooltip="檢視課程群組"
+                (onClick)="goCourseGroup()"
+              />
+            </span>
+          } @else {
+            <span class="muted">—</span>
+          }
+        </dd>
+
+        <dt>上架狀態</dt>
+        <dd>
+          <span class="fk-link">
+            {{ c.publishStatusDescription }}
+            <p-button
+              icon="pi pi-external-link"
+              severity="secondary"
+              [text]="true"
+              [rounded]="true"
+              size="small"
+              pTooltip="檢視發布狀態"
+              (onClick)="goPublishStatus()"
+            />
+          </span>
+        </dd>
+
+        <dt>上架日期</dt>
+        <dd>{{ c.scheduleOn | date: 'yyyy/MM/dd' }}</dd>
+
+        <dt>下架日期</dt>
+        <dd>{{ c.scheduleOff | date: 'yyyy/MM/dd' }}</dd>
+
+        <dt>時數</dt>
+        <dd>{{ c.hour }}</dd>
+
+        <dt>定價</dt>
+        <dd>{{ c.listPrice | number: '1.0-0' }}</dd>
+
+        <dt>點數</dt>
+        <dd>{{ c.learningCredit | number: '1.1-1' }}</dd>
+
+        <dt>允許重聽</dt>
+        <dd>
+          <p-tag
+            [value]="c.canRepeat ? '是' : '否'"
+            [severity]="c.canRepeat ? 'success' : 'secondary'"
+          />
+        </dd>
+
+        <dt>教材</dt>
+        <dd>{{ c.material || '—' }}</dd>
+
+        <dt>適合對象</dt>
+        <dd>{{ c.target || '—' }}</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">認證 <span class="count">（{{ c.certificationCount }}）</span></h2>
+      @if (certificationLabels().length > 0) {
+        <div class="chips">
+          @for (label of certificationLabels(); track label) {
+            <p-tag [value]="label" severity="secondary" />
+          }
+        </div>
+      } @else {
+        <p class="empty">此課程目前沒有對應任何認證。</p>
+      }
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">職務類別 <span class="count">（{{ c.jobCategoryCount }}）</span></h2>
+      @if (jobCategoryLabels().length > 0) {
+        <div class="chips">
+          @for (label of jobCategoryLabels(); track label) {
+            <p-tag [value]="label" severity="secondary" />
+          }
+        </div>
+      } @else {
+        <p class="empty">此課程目前沒有對應任何職務類別。</p>
+      }
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">詳細內容</h2>
+      <dl class="detail-grid">
+        <dt>課程目標</dt>
+        <dd><pre class="longtext">{{ c.objective || '—' }}</pre></dd>
+
+        <dt>先備知識</dt>
+        <dd><pre class="longtext">{{ c.prerequisites || '—' }}</pre></dd>
+
+        <dt>課程大綱</dt>
+        <dd><pre class="longtext">{{ c.outline || '—' }}</pre></dd>
+
+        <dt>對應認證/考試</dt>
+        <dd><pre class="longtext">{{ c.towardCertOrExam || '—' }}</pre></dd>
+
+        <dt>備註</dt>
+        <dd><pre class="longtext">{{ c.note || '—' }}</pre></dd>
+
+        <dt>其他資訊</dt>
+        <dd><pre class="longtext">{{ c.otherInfo || '—' }}</pre></dd>
+      </dl>
+    </div>
+  } @else if (!loading()) {
+    <div class="card empty">查無資料。</div>
+  }
+</div>

@@ -25,6 +25,15 @@ worked examples and `backend-conventions.md` for the API side.
 - **`bit` columns**: form control is `p-toggleswitch`; list/detail display uses `p-tag`
   (是/否, severity varies); filter drawer uses a tri-state `p-select` (options 是/否,
   `[showClear]="true"`, `appendTo="body"`) bound to a `bool | null` — null = no filter.
+- **`date` columns**: control is `p-datepicker` (PrimeNG 20 — **not** the pre-v18
+  `p-calendar`); multiline text is `pTextarea` on a `<textarea>` (**not** `pInputTextarea`).
+  Convert with `toIsoDate()` / `fromIsoDate()` from **`core/utils/week.util.ts`** — they
+  use local date components, so a SQL `date` never shifts a day for UTC+8.
+  ⚠️ `feature-spec.template.md` and `sample1.spec.md` cite `core/utils/date.util.ts` /
+  `toIso()` — **that file does not exist here**; they are generic course material for a
+  different app. Use `week.util.ts`.
+  (The `'Z'`-suffix trick is for `datetime` columns only — Dapper returns those with
+  `Kind = Unspecified`. It does **not** apply to `date`.)
 - **Routing**: lazy `loadComponent`. Order `.../new` **before** `.../:id`.
 - **Sidebar**: data-driven nav in `app.ts`; add each feature under its group
   (e.g. AppRole lives under `系統管理 Admin`, Partner under `課程管理 Course`).

@@ -53,6 +53,23 @@ public sealed class LookupRepository : ILookupRepository
             cancellationToken: cancellationToken));
     }
 
+    public async Task<IEnumerable<CertificationLookup>> GetCertificationsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        // Title is nchar(100) — RTRIM it, or every label carries trailing padding.
+        return await connection.QueryAsync<CertificationLookup>(new CommandDefinition(
+            "SELECT pkid, RTRIM(Title) AS Title FROM Certification ORDER BY Title ASC",
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<IEnumerable<JobCategoryLookup>> GetJobCategoriesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        return await connection.QueryAsync<JobCategoryLookup>(new CommandDefinition(
+            "SELECT pkid, Description FROM JobCategory ORDER BY Description ASC",
+            cancellationToken: cancellationToken));
+    }
+
     public async Task<IEnumerable<TrainingCenterLookup>> GetTrainingCentersAsync(CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);

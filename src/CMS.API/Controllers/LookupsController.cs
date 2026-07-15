@@ -40,6 +40,16 @@ public class LookupsController : ControllerBase
     public async Task<ActionResult<IEnumerable<CourseGroupLookup>>> GetCourseGroups(CancellationToken cancellationToken)
         => Ok(await _repository.GetCourseGroupsAsync(cancellationToken));
 
+    /// <summary>Slim Certification list for the Course "認證" multiselect.</summary>
+    [HttpGet("certifications")]
+    public async Task<ActionResult<IEnumerable<CertificationLookup>>> GetCertifications(CancellationToken cancellationToken)
+        => Ok(await _repository.GetCertificationsAsync(cancellationToken));
+
+    /// <summary>Slim JobCategory list for the Course "職務類別" multiselect.</summary>
+    [HttpGet("job-categories")]
+    public async Task<ActionResult<IEnumerable<JobCategoryLookup>>> GetJobCategories(CancellationToken cancellationToken)
+        => Ok(await _repository.GetJobCategoriesAsync(cancellationToken));
+
     /// <summary>Slim TrainingCenter list for the FeaturedPromoItem board's tab strip.</summary>
     [HttpGet("training-centers")]
     public async Task<ActionResult<IEnumerable<TrainingCenterLookup>>> GetTrainingCenters(CancellationToken cancellationToken)

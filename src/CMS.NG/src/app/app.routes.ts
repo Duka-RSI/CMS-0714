@@ -74,6 +74,27 @@ export const routes: Routes = [
       import('@app/features/partners/partner-detail/partner-detail').then((m) => m.PartnerDetail),
   },
   {
+    path: 'courses',
+    loadComponent: () =>
+      import('@app/features/courses/course-list/course-list').then((m) => m.CourseList),
+  },
+  {
+    // Must precede ':id' so "new" is not captured as a pkid.
+    path: 'courses/new',
+    loadComponent: () =>
+      import('@app/features/courses/course-form/course-form').then((m) => m.CourseForm),
+  },
+  {
+    path: 'courses/:id/edit',
+    loadComponent: () =>
+      import('@app/features/courses/course-form/course-form').then((m) => m.CourseForm),
+  },
+  {
+    path: 'courses/:id',
+    loadComponent: () =>
+      import('@app/features/courses/course-detail/course-detail').then((m) => m.CourseDetail),
+  },
+  {
     path: 'course-groups',
     loadComponent: () =>
       import('@app/features/course-groups/course-group-list/course-group-list').then(
