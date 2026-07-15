@@ -1,6 +1,7 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 
 namespace CMS.API.Controllers;
 
@@ -25,15 +26,15 @@ public class CourseGroupsController : ControllerBase
     public async Task<ActionResult<IEnumerable<CourseGroup>>> Query([FromBody] CourseGroupQuery query, CancellationToken cancellationToken)
         => Ok(await _repository.QueryAsync(query, cancellationToken));
 
-    /// <summary>Get a single course group by its pkid.</summary>
-    [HttpGet("{id}")]
+    /// <summary>Get a single course group by pkid.</summary>
+    [HttpGet("{id:int}")]
     public async Task<ActionResult<CourseGroup>> GetById(short id, CancellationToken cancellationToken)
     {
-        var courseGroup = await _repository.GetByIdAsync(id, cancellationToken);
-        return courseGroup is null ? NotFound() : Ok(courseGroup);
+        var group = await _repository.GetByIdAsync(id, cancellationToken);
+        return group is null ? NotFound() : Ok(group);
     }
 
-    /// <summary>Create a new course group. pkid is IDENTITY (server-assigned).</summary>
+    /// <summary>Create a new course group.</summary>
     [HttpPost]
     public async Task<ActionResult<CourseGroup>> Create([FromBody] CourseGroupRequest request, CancellationToken cancellationToken)
     {
@@ -46,7 +47,7 @@ public class CourseGroupsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Pkid }, created);
     }
 
-    /// <summary>Update an existing course group. pkid is taken from the body and is immutable.</summary>
+    /// <summary>Update an existing course group. Pkid is taken from the body.</summary>
     [HttpPut]
     public async Task<IActionResult> Update([FromBody] CourseGroupRequest request, CancellationToken cancellationToken)
     {
@@ -59,11 +60,21 @@ public class CourseGroupsController : ControllerBase
         return updated ? NoContent() : NotFound();
     }
 
-    /// <summary>Delete a course group by pkid.</summary>
-    [HttpDelete("{id}")]
+    /// <summary>
+    /// Delete a course group by pkid. Courses in the group are cascade-deleted (schema FK);
+    /// returns 409 when PartnerCourseGroup rows still reference the group (FK without cascade).
+    /// </summary>
+    [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(short id, CancellationToken cancellationToken)
     {
-        var deleted = await _repository.DeleteAsync(id, cancellationToken);
-        return deleted ? NoContent() : NotFound();
+        try
+        {
+            var deleted = await _repository.DeleteAsync(id, cancellationToken);
+            return deleted ? NoContent() : NotFound();
+        }
+        catch (SqlException ex) when (ex.Number == 547)
+        {
+            return Conflict(new { message = "該群組仍被廠商課程群組引用，無法刪除。" });
+        }
     }
 }

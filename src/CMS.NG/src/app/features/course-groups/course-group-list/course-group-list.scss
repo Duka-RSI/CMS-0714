@@ -129,7 +129,7 @@
 }
 
 .field input,
-.field ::ng-deep .p-select {
+.field :is(p-inputnumber) {
   width: 100%;
 }
 

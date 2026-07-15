@@ -59,17 +59,29 @@
 
 .field input,
 .field ::ng-deep .p-inputnumber,
-.field ::ng-deep .p-inputnumber-input {
+.field ::ng-deep .p-inputnumber-input,
+.field ::ng-deep .p-multiselect,
+.field ::ng-deep .p-select {
   width: 100%;
+}
+
+/* Wrap multiselect chips instead of clipping them. */
+.field ::ng-deep .p-multiselect-label {
+  white-space: normal;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Read-only PK shown in edit mode (IDENTITY — not an editable control). */
+.readonly-value {
+  padding: 8px 0;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .error {
   color: #ef4444;
-  font-size: 12px;
-}
-
-.hint {
-  color: #94a3b8;
   font-size: 12px;
 }
 

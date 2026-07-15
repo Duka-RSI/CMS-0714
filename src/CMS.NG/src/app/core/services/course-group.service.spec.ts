@@ -10,9 +10,11 @@ describe('CourseGroupService', () => {
   let httpMock: HttpTestingController;
   const base = `${environment.apiUrl}/course-groups`;
 
-  const sample: CourseGroup = {
+  const sampleGroup: CourseGroup = {
     pkid: 1,
-    description: '資訊類',
+    description: '微軟課程',
+    courseCount: 12,
+    partnerCourseGroupCount: 2,
   };
 
   beforeEach(() => {
@@ -26,41 +28,38 @@ describe('CourseGroupService', () => {
   afterEach(() => httpMock.verify());
 
   it('getAll() issues GET /course-groups', () => {
-    service.getAll().subscribe((res) => expect(res).toEqual([sample]));
+    service.getAll().subscribe((res) => expect(res).toEqual([sampleGroup]));
     const req = httpMock.expectOne(base);
     expect(req.request.method).toBe('GET');
-    req.flush([sample]);
+    req.flush([sampleGroup]);
   });
 
   it('query() POSTs the filter to /course-groups/query', () => {
-    service.query({ keyword: '資訊' }).subscribe((res) => expect(res.length).toBe(1));
+    service.query({ keyword: '微軟' }).subscribe((res) => expect(res.length).toBe(1));
     const req = httpMock.expectOne(`${base}/query`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ keyword: '資訊' });
-    req.flush([sample]);
+    expect(req.request.body).toEqual({ keyword: '微軟' });
+    req.flush([sampleGroup]);
   });
 
-  it('getById() issues GET /course-groups/{id}', () => {
-    service.getById(1).subscribe();
+  it('getById() issues GET with the numeric pkid', () => {
+    service.getById(1).subscribe((res) => expect(res).toEqual(sampleGroup));
     const req = httpMock.expectOne(`${base}/1`);
     expect(req.request.method).toBe('GET');
-    req.flush(sample);
+    req.flush(sampleGroup);
   });
 
   it('create() POSTs the request to /course-groups', () => {
-    const request: CourseGroupRequest = {
-      pkid: 0,
-      description: '管理類',
-    };
+    const request: CourseGroupRequest = { pkid: 0, description: '思科課程' };
     service.create(request).subscribe();
     const req = httpMock.expectOne(base);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(request);
-    req.flush({ ...sample, pkid: 5, description: '管理類' });
+    req.flush({ ...sampleGroup, pkid: 3, description: '思科課程' });
   });
 
   it('update() PUTs the request to /course-groups', () => {
-    const request: CourseGroupRequest = { ...sample };
+    const request: CourseGroupRequest = { pkid: 1, description: '微軟課程（更新）' };
     service.update(request).subscribe();
     const req = httpMock.expectOne(base);
     expect(req.request.method).toBe('PUT');
@@ -68,7 +67,7 @@ describe('CourseGroupService', () => {
     req.flush(null);
   });
 
-  it('delete() issues DELETE /course-groups/{id}', () => {
+  it('delete() issues DELETE with the numeric pkid', () => {
     service.delete(1).subscribe();
     const req = httpMock.expectOne(`${base}/1`);
     expect(req.request.method).toBe('DELETE');

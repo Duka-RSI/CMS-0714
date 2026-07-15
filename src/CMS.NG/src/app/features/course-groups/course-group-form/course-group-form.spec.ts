@@ -8,9 +8,11 @@ import { CourseGroupForm } from './course-group-form';
 import { CourseGroupService } from '@app/core/services/course-group.service';
 import { CourseGroup } from '@app/core/models/course-group.model';
 
-const courseGroup: CourseGroup = {
-  pkid: 2,
-  description: '管理類',
+const group: CourseGroup = {
+  pkid: 1,
+  description: '微軟課程',
+  courseCount: 12,
+  partnerCourseGroupCount: 2,
 };
 
 function setup(routeId: string | null) {
@@ -19,8 +21,8 @@ function setup(routeId: string | null) {
     'create',
     'update',
   ]);
-  service.getById.and.returnValue(of(courseGroup));
-  service.create.and.returnValue(of(courseGroup));
+  service.getById.and.returnValue(of(group));
+  service.create.and.returnValue(of(group));
   service.update.and.returnValue(of(void 0));
 
   TestBed.configureTestingModule({
@@ -47,30 +49,31 @@ function setup(routeId: string | null) {
 describe('CourseGroupForm (add mode)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('starts in add mode', () => {
-    const { component } = setup(null);
+  it('starts in add mode without loading a record', () => {
+    const { component, service } = setup(null);
     expect(component['isEdit']()).toBeFalse();
+    expect(service.getById).not.toHaveBeenCalled();
+    expect(component['form'].controls.description.value).toBe('');
   });
 
-  it('does not submit an invalid form', () => {
+  it('does not submit an invalid form (description required)', () => {
     const { component, service } = setup(null);
     component['save']();
     expect(service.create).not.toHaveBeenCalled();
     expect(component['form'].controls.description.touched).toBeTrue();
   });
 
-  it('creates the course group when the form is valid', () => {
+  it('creates the group when the form is valid', () => {
     const { component, service } = setup(null);
     const router = TestBed.inject(Router);
     const navSpy = spyOn(router, 'navigate');
 
-    component['form'].patchValue({ description: '設計類' });
+    component['form'].patchValue({ description: '思科課程' });
     component['save']();
 
     expect(service.create).toHaveBeenCalledTimes(1);
     const arg = service.create.calls.mostRecent().args[0];
-    expect(arg.description).toBe('設計類');
-    expect(arg.pkid).toBe(0); // IDENTITY placeholder in add mode
+    expect(arg.description).toBe('思科課程');
     expect(navSpy).toHaveBeenCalledWith(['/course-groups']);
   });
 });
@@ -78,26 +81,26 @@ describe('CourseGroupForm (add mode)', () => {
 describe('CourseGroupForm (edit mode)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('loads the course group, patches the form and disables pkid', () => {
-    const { component, service } = setup('2');
-    expect(service.getById).toHaveBeenCalledWith(2);
+  it('loads the group and patches the form', () => {
+    const { component, service } = setup('1');
+    expect(service.getById).toHaveBeenCalledWith(1);
     expect(component['isEdit']()).toBeTrue();
-    expect(component['form'].controls.description.value).toBe('管理類');
-    expect(component['form'].controls.pkid.disabled).toBeTrue();
+    expect(component['pkid']()).toBe(1);
+    expect(component['form'].controls.description.value).toBe('微軟課程');
   });
 
-  it('updates the course group on save, keeping the disabled pkid in the payload', () => {
-    const { component, service } = setup('2');
+  it('updates the group on save, carrying the pkid in the payload', () => {
+    const { component, service } = setup('1');
     const router = TestBed.inject(Router);
     const navSpy = spyOn(router, 'navigate');
 
-    component['form'].patchValue({ description: '管理類 (edited)' });
+    component['form'].patchValue({ description: '微軟課程（更新）' });
     component['save']();
 
     expect(service.update).toHaveBeenCalledTimes(1);
     const arg = service.update.calls.mostRecent().args[0];
-    expect(arg.pkid).toBe(2);
-    expect(arg.description).toBe('管理類 (edited)');
+    expect(arg.pkid).toBe(1);
+    expect(arg.description).toBe('微軟課程（更新）');
     expect(navSpy).toHaveBeenCalledWith(['/course-groups']);
   });
 });

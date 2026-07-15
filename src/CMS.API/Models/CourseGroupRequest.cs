@@ -3,9 +3,8 @@ using System.ComponentModel.DataAnnotations;
 namespace CMS.API.Models;
 
 /// <summary>
-/// Write DTO for creating/updating a CourseGroup. <see cref="Pkid"/> is a smallint
-/// IDENTITY — server-assigned on create (ignored in the INSERT), and immutable on
-/// update (the form disables it in edit mode).
+/// Write DTO for creating/updating a CourseGroup. <see cref="Pkid"/> is ignored on create
+/// (IDENTITY) and identifies the row on update.
 /// </summary>
 public class CourseGroupRequest
 {

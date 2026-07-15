@@ -19,19 +19,19 @@ export class CourseGroupDetail implements OnInit {
   private readonly service = inject(CourseGroupService);
   private readonly messageService = inject(MessageService);
 
-  protected readonly courseGroup = signal<CourseGroup | null>(null);
+  protected readonly group = signal<CourseGroup | null>(null);
   protected readonly loading = signal(true);
 
   ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('id');
+    const id = Number(this.route.snapshot.paramMap.get('id'));
     if (!id) {
       this.router.navigate(['/course-groups']);
       return;
     }
 
-    this.service.getById(Number(id)).subscribe({
-      next: (courseGroup) => {
-        this.courseGroup.set(courseGroup);
+    this.service.getById(id).subscribe({
+      next: (group) => {
+        this.group.set(group);
         this.loading.set(false);
       },
       error: () => {
@@ -51,7 +51,7 @@ export class CourseGroupDetail implements OnInit {
   }
 
   goEdit(): void {
-    const current = this.courseGroup();
+    const current = this.group();
     if (current) {
       this.router.navigate(['/course-groups', current.pkid, 'edit']);
     }

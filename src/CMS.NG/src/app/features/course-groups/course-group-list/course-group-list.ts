@@ -36,14 +36,12 @@ export class CourseGroupList implements OnInit {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
 
-  protected readonly courseGroups = signal<CourseGroup[]>([]);
+  protected readonly groups = signal<CourseGroup[]>([]);
   protected readonly loading = signal(false);
   protected readonly filterVisible = signal(false);
 
   // Filter model (bound in the drawer).
-  protected filters: CourseGroupQuery = {
-    keyword: null,
-  };
+  protected filters: CourseGroupQuery = { keyword: null };
 
   // The filters currently applied to the list (drives the "filtered" highlight).
   protected readonly appliedFilters = signal<{ label: string; value: string }[]>([]);
@@ -52,7 +50,7 @@ export class CourseGroupList implements OnInit {
 
   // Persisted table state.
   protected sortField = 'pkid';
-  protected sortOrder = 1;
+  protected sortOrder = -1;
   protected first = 0;
   protected rows = 20;
 
@@ -94,7 +92,7 @@ export class CourseGroupList implements OnInit {
     this.loading.set(true);
     this.service.query(this.filters).subscribe({
       next: (data) => {
-        this.courseGroups.set(data);
+        this.groups.set(data);
         this.loading.set(false);
       },
       error: () => {
@@ -158,41 +156,45 @@ export class CourseGroupList implements OnInit {
     this.router.navigate(['/course-groups/new']);
   }
 
-  goView(courseGroup: CourseGroup): void {
-    this.router.navigate(['/course-groups', courseGroup.pkid]);
+  goView(group: CourseGroup): void {
+    this.router.navigate(['/course-groups', group.pkid]);
   }
 
-  goEdit(courseGroup: CourseGroup): void {
-    this.router.navigate(['/course-groups', courseGroup.pkid, 'edit']);
+  goEdit(group: CourseGroup): void {
+    this.router.navigate(['/course-groups', group.pkid, 'edit']);
   }
 
-  confirmDelete(courseGroup: CourseGroup): void {
+  confirmDelete(group: CourseGroup): void {
     this.confirmationService.confirm({
       header: '刪除確認',
-      message: `確定要刪除主代碼 <b>${courseGroup.pkid}</b>「${courseGroup.description}」？`,
+      // FK_Course_CourseGroup is ON DELETE CASCADE — warn about the courses that go with it.
+      message: `確定要刪除主代碼 <b>${group.pkid}</b>「${group.description}」？<br>群組內的 ${group.courseCount} 筆課程將一併刪除。`,
       icon: 'pi pi-exclamation-triangle',
       acceptLabel: '刪除',
       rejectLabel: '取消',
       acceptButtonStyleClass: 'p-button-danger',
-      accept: () => this.delete(courseGroup),
+      accept: () => this.delete(group),
     });
   }
 
-  private delete(courseGroup: CourseGroup): void {
-    this.service.delete(courseGroup.pkid).subscribe({
+  private delete(group: CourseGroup): void {
+    this.service.delete(group.pkid).subscribe({
       next: () => {
         this.messageService.add({
           severity: 'success',
           summary: '刪除成功',
-          detail: `課程群組「${courseGroup.description}」已刪除。`,
+          detail: `課程群組「${group.description}」已刪除。`,
         });
         this.load();
       },
-      error: () => {
+      error: (err) => {
         this.messageService.add({
           severity: 'error',
           summary: '刪除失敗',
-          detail: '刪除課程群組時發生錯誤。',
+          detail:
+            err?.status === 409
+              ? '該群組仍被廠商課程群組引用，無法刪除。'
+              : '刪除課程群組時發生錯誤。',
         });
       },
     });

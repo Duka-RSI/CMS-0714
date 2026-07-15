@@ -21,13 +21,12 @@
   </div>
 
   <div class="card">
-    <h2 class="section-title">課程群組資料</h2>
+    <h2 class="section-title">群組資料</h2>
 
     @if (isEdit()) {
       <div class="field">
-        <label for="pkid">主代碼</label>
-        <p-inputNumber inputId="pkid" formControlName="pkid" [useGrouping]="false" />
-        <small class="hint">主代碼為主鍵，編輯時不可修改。</small>
+        <label>主代碼</label>
+        <div class="readonly-value">{{ pkid() }}</div>
       </div>
     }
 
@@ -38,8 +37,9 @@
         type="text"
         pInputText
         formControlName="description"
-        maxlength="100"
         placeholder="請輸入群組名稱"
+        maxlength="100"
+        [class.ng-invalid-touched]="form.controls.description.invalid && form.controls.description.touched"
       />
       @if (form.controls.description.invalid && form.controls.description.touched) {
         <small class="error">請輸入群組名稱。</small>

@@ -5,6 +5,6 @@ namespace CMS.API.Models;
 /// </summary>
 public class CourseGroupQuery
 {
-    /// <summary>LIKE match on Description.</summary>
+    /// <summary>LIKE match on Description (the only string column).</summary>
     public string? Keyword { get; set; }
 }

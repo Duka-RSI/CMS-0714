@@ -7,15 +7,21 @@
     </div>
   </div>
 
-  @if (courseGroup(); as cg) {
+  @if (group(); as g) {
     <div class="card">
-      <h2 class="section-title">課程群組資料</h2>
+      <h2 class="section-title">群組資料</h2>
       <dl class="detail-grid">
         <dt>主代碼</dt>
-        <dd>{{ cg.pkid }}</dd>
+        <dd>{{ g.pkid }}</dd>
 
         <dt>群組名稱</dt>
-        <dd>{{ cg.description }}</dd>
+        <dd>{{ g.description }}</dd>
+
+        <dt>課程數</dt>
+        <dd>{{ g.courseCount }}</dd>
+
+        <dt>廠商群組數</dt>
+        <dd>{{ g.partnerCourseGroupCount }}</dd>
       </dl>
     </div>
   } @else if (!loading()) {

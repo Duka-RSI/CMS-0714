@@ -40,13 +40,18 @@
   margin: 0 0 16px;
 }
 
+.count {
+  color: #94a3b8;
+  font-weight: 500;
+  font-size: 14px;
+}
+
 .detail-grid {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 140px 1fr;
   row-gap: 12px;
   column-gap: 16px;
   margin: 0;
-  align-items: center;
 }
 
 .detail-grid dt {
@@ -57,6 +62,12 @@
 .detail-grid dd {
   margin: 0;
   color: #1e293b;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .empty {

@@ -8,9 +8,11 @@ import { CourseGroupDetail } from './course-group-detail';
 import { CourseGroupService } from '@app/core/services/course-group.service';
 import { CourseGroup } from '@app/core/models/course-group.model';
 
-const courseGroup: CourseGroup = {
-  pkid: 2,
-  description: '管理類',
+const group: CourseGroup = {
+  pkid: 1,
+  description: '微軟課程',
+  courseCount: 12,
+  partnerCourseGroupCount: 2,
 };
 
 describe('CourseGroupDetail', () => {
@@ -20,7 +22,7 @@ describe('CourseGroupDetail', () => {
 
   beforeEach(async () => {
     serviceSpy = jasmine.createSpyObj<CourseGroupService>('CourseGroupService', ['getById']);
-    serviceSpy.getById.and.returnValue(of(courseGroup));
+    serviceSpy.getById.and.returnValue(of(group));
 
     await TestBed.configureTestingModule({
       imports: [CourseGroupDetail],
@@ -32,7 +34,7 @@ describe('CourseGroupDetail', () => {
         // Must come after provideRouter() so this mock wins over the router's ActivatedRoute.
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { paramMap: convertToParamMap({ id: '2' }) } },
+          useValue: { snapshot: { paramMap: convertToParamMap({ id: '1' }) } },
         },
       ],
     }).compileComponents();
@@ -42,20 +44,22 @@ describe('CourseGroupDetail', () => {
     fixture.detectChanges();
   });
 
-  it('loads the course group by id from the route', () => {
-    expect(serviceSpy.getById).toHaveBeenCalledWith(2);
-    expect(component['courseGroup']()?.description).toBe('管理類');
+  it('loads the group by numeric id from the route', () => {
+    expect(serviceSpy.getById).toHaveBeenCalledWith(1);
+    expect(component['group']()?.description).toBe('微軟課程');
   });
 
-  it('renders course group fields', () => {
+  it('renders group fields including counts', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('管理類');
+    expect(text).toContain('微軟課程');
+    expect(text).toContain('12');
+    expect(text).toContain('2');
   });
 
   it('goEdit navigates to the edit route', () => {
     const router = TestBed.inject(Router);
     const navSpy = spyOn(router, 'navigate');
     component['goEdit']();
-    expect(navSpy).toHaveBeenCalledWith(['/course-groups', 2, 'edit']);
+    expect(navSpy).toHaveBeenCalledWith(['/course-groups', 1, 'edit']);
   });
 });

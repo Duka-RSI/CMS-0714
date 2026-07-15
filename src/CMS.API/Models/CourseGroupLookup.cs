@@ -1,6 +1,8 @@
 namespace CMS.API.Models;
 
-/// <summary>Slim CourseGroup lookup row for FK dropdowns (Course, PartnerCourseGroup).</summary>
+/// <summary>
+/// Slim lookup row for CourseGroup, used to populate FK dropdowns (e.g. the future Course form).
+/// </summary>
 public class CourseGroupLookup
 {
     public short Pkid { get; set; }

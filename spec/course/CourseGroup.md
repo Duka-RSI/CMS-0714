@@ -1,25 +1,25 @@
 # Build Spec for CourseGroup
-- database schema: `.\database\course.sql`
+- database schema: .\database\course.sql
 
 ## Summary
 
-`CourseGroup` is a minimal lookup-style master table (課程群組) that classifies
-courses into groups. It carries only a single display `Description`. It has **no
-foreign keys** and **no N-N relationships**, but it **is an FK target** for `Course`
-(`Course.CourseGroup_pkid`, nullable) and `PartnerCourseGroup`
-(`PartnerCourseGroup.CourseGroup_pkid`), so it needs a slim lookup endpoint.
-This is the simplest possible Partner-pattern table (smallint IDENTITY PK, one
-non-key column).
+`CourseGroup` is a small lookup-style entity that categorizes courses into groups
+(e.g. by technology or product family). It has a single descriptive column. It is
+referenced by `Course` (nullable FK, **ON DELETE CASCADE**) and by
+`PartnerCourseGroup` (NOT NULL FK, no cascade). It has no outbound foreign keys
+and no N-N relationships — `PartnerCourseGroup` is *not* a pure junction (it has
+its own `pkid`, `DisplayOrder`, and `Description` payload columns), so it is
+treated as a child entity, not an N-N link.
 
 | Item | Detail |
 |------|--------|
-| Primary Key | `pkid` **smallint IDENTITY** (auto-generated; hidden in add, read-only in edit) |
+| Primary Key | `pkid` **smallint** IDENTITY |
 | Foreign Keys | None |
 | Required Fields | `Description` |
-| N-N Relationships | N/A |
-| Primary-Foreign Links | `Course`, `PartnerCourseGroup` reference `CourseGroup_pkid` (child features not yet built — links deferred) |
+| N-N Relationships | N/A (`PartnerCourseGroup` has payload columns → child entity, not junction) |
+| Primary-Foreign Links | `Course.CourseGroup_pkid` (nullable, ON DELETE CASCADE), `PartnerCourseGroup.CourseGroup_pkid` (NOT NULL) |
 | Query Filters | keyword (Description) |
-| Default Sort | `pkid ASC` |
+| Default Sort | `pkid DESC` (list); lookup dropdown orders `pkid ASC` |
 
 ---
 
@@ -28,22 +28,27 @@ non-key column).
 ### Chinese Table Name
 
 - CourseGroup: 課程群組
-- Description: 課程群組主資料（將課程分類的群組）
+- Description: 課程分類群組，供課程與廠商課程群組引用
 
 ### Chinese Column Names
 
 - pkid: 主代碼
 - Description: 群組名稱
 
+Derived (read-only, correlated subqueries):
+
+- CourseCount: 課程數
+- PartnerCourseGroupCount: 廠商群組數
+
 ---
 
 ## Required Fields
 
-Required (NOT NULL, excluding the IDENTITY PK):
-- `Description` — nvarchar(100)
+Required (NOT NULL):
+- `Description` nvarchar(100) NOT NULL
 
 Optional (nullable):
-- None
+- none
 
 ---
 
@@ -51,7 +56,7 @@ Optional (nullable):
 
 `CourseGroup` has no foreign key columns.
 
-**N/A**
+N/A
 
 ---
 
@@ -59,43 +64,53 @@ Optional (nullable):
 
 `CourseGroup` has no foreign key columns.
 
-**N/A**
+N/A
 
 ---
 
 ## Primary-Foreign Links
 
-The following tables reference `CourseGroup.pkid` as an FK target:
+Two tables reference `CourseGroup.pkid`:
 
-- **Course** (`Course.CourseGroup_pkid`, nullable) — 對應課程 → `/courses?courseGroupPkid={pkid}`
-- **PartnerCourseGroup** (`PartnerCourseGroup.CourseGroup_pkid`) — 對應廠商課程群組 → `/partner-course-groups?courseGroupPkid={pkid}`
+- **Course** (`CourseGroup_pkid`, nullable, **ON DELETE CASCADE**)
+  - Column header: 對應課程
+  - Button label: 查看課程 (icon: `pi pi-list`)
+  - Link target: `/courses?courseGroupPkid={pkid}`
+  - **Deferred**: the Course feature does not exist yet — do not render the
+    navigation button until `/courses` is built. Show only the `CourseCount`
+    (課程數) column for now.
 
-**Deferred:** neither child feature has a list route yet. Following the `Partner`
-and `PublishStatus` reference (both FK targets with no built children), the
-CourseGroup list/detail pages do **not** render primary-foreign link buttons in this
-pass. Wire them when the child features are generated. This section documents the
-intended links.
+- **PartnerCourseGroup** (`CourseGroup_pkid`, NOT NULL, no cascade)
+  - Column header: 對應廠商群組
+  - Button label: 查看廠商群組 (icon: `pi pi-list`)
+  - Link target: `/partner-course-groups?courseGroupPkid={pkid}`
+  - **Deferred**: the PartnerCourseGroup feature does not exist yet — show only
+    the `PartnerCourseGroupCount` (廠商群組數) column for now.
+
+> **Delete-behavior warning (surface in code comments + spec only, no extra UI):**
+> deleting a CourseGroup **cascade-deletes all Courses in the group**
+> (`FK_Course_CourseGroup ... ON DELETE CASCADE`). If any `PartnerCourseGroup`
+> rows reference it, the DELETE fails with a FK violation instead. The controller
+> should catch `SqlException` FK violations and return `409 Conflict` with a
+> descriptive message; the list/detail delete confirm message must mention the
+> cascade (see Frontend Notes).
 
 ---
 
 ## N-N Relationships
 
-`CourseGroup` participates in no junction tables. (`PartnerCourseGroup` has three
-non-key columns beyond its two FKs — `DisplayOrder`, `Description`, `pkid` IDENTITY —
-so it is a first-class entity, not a pure junction table, and is **not** treated as N-N.)
-
-**N/A**
+N/A — `PartnerCourseGroup` has exactly two FKs but also carries `pkid`,
+`DisplayOrder`, and `Description`, so it is a standalone child entity managed by
+its own future feature, not synced from the CourseGroup form.
 
 ---
 
 ## Query Filters
 
 - **keyword**: string
-  - LIKE on `Description`
+  - LIKE on `Description` (the only string column)
 
-No FK filters (no FK columns), no bool filters (no bit columns), no date-range
-filters (no date/datetime columns). The filter drawer holds a single keyword field
-(mirrors the `Partner` single-filter pattern).
+No FK filters, bool filters, or date-range filters — the table has no such columns.
 
 ---
 
@@ -103,31 +118,24 @@ filters (no date/datetime columns). The filter drawer holds a single keyword fie
 
 | Route | Status | Returns |
 |-------|--------|---------|
-| `GET /api/lookups/course-groups` | **New** | Slim CourseGroup list (`pkid`, `Description`) ordered by `Description ASC` — for Course/PartnerCourseGroup FK dropdowns |
-
-`CourseGroupLookup` model (`{ pkid, Description }`) added; `LookupRepository.GetCourseGroupsAsync`,
-`ILookupRepository`, and `LookupsController` GET `course-groups` endpoint added; matching
-`LookupService.getCourseGroups()` + `course-group-lookup.model.ts` on the frontend.
+| `GET /api/lookups/course-groups` | **New** | `{ pkid, description }` list, ordered `pkid ASC` — needed by the future Course feature's FK dropdown; add it now while touching this table |
 
 ---
 
 ## API Endpoints
 
+Standard six only:
+
 | Method | Route | Notes |
 |--------|-------|-------|
-| `GET` | `/api/course-groups` | List all |
+| `GET` | `/api/course-groups` | List all (includes counts) |
 | `POST` | `/api/course-groups/query` | Filtered query (body: `CourseGroupQuery`) |
-| `GET` | `/api/course-groups/{id}` | Get by pkid (`short` route param) |
-| `POST` | `/api/course-groups` | Create (pkid is IDENTITY — omitted from body; returns new pkid) |
-| `PUT` | `/api/course-groups` | Update (pkid from body, immutable) |
-| `DELETE` | `/api/course-groups/{id}` | Delete |
-| `GET` | `/api/lookups/course-groups` | Slim lookup list (new) |
+| `GET` | `/api/course-groups/{id}` | Get by pkid (`{id:int}` route constraint; int PK, no encodeURIComponent needed) |
+| `POST` | `/api/course-groups` | Create → 201 with created entity |
+| `PUT` | `/api/course-groups` | Update (pkid **in body**, no route param) |
+| `DELETE` | `/api/course-groups/{id}` | Delete → 204; **409** if referenced by PartnerCourseGroup |
 
-- **No 409 uniqueness check**: `pkid` is IDENTITY (auto-generated), and there is no
-  UNIQUE constraint on `Description`, so `Create` inserts directly and returns
-  `SELECT CAST(SCOPE_IDENTITY() AS smallint)`. Mirrors the `Partner` IDENTITY pattern,
-  **not** the `PublishStatus` user-assigned-PK 409 pattern.
-- No auth attributes (matches AppRole/PublishStatus/Partner).
+No auth exceptions. No special endpoints.
 
 ---
 
@@ -136,175 +144,208 @@ filters (no date/datetime columns). The filter drawer holds a single keyword fie
 ### Models
 
 ```csharp
-// CourseGroup.cs (response)
 public class CourseGroup
 {
     public short Pkid { get; set; }
     public string Description { get; set; } = string.Empty;
+    // Correlated subquery counts (read-only):
+    public int CourseCount { get; set; }
+    public int PartnerCourseGroupCount { get; set; }
 }
 
-// CourseGroupRequest.cs (write DTO — pkid used on UPDATE only, IDENTITY on INSERT)
 public class CourseGroupRequest
 {
-    public short Pkid { get; set; }
-
-    [Required, MaxLength(100)] public string Description { get; set; } = string.Empty;
+    public short Pkid { get; set; }              // ignored on create
+    [Required, StringLength(100)]
+    public string Description { get; set; } = string.Empty;
 }
 
-// CourseGroupQuery.cs (search DTO)
 public class CourseGroupQuery
 {
     public string? Keyword { get; set; }
 }
-
-// CourseGroupLookup.cs (slim lookup)
-public class CourseGroupLookup
-{
-    public short Pkid { get; set; }
-    public string Description { get; set; } = string.Empty;
-}
 ```
+
+`pkid` is `smallint` → C# `short` everywhere (model, request, repo method
+signatures `GetByIdAsync(short id, ...)`, controller route param).
 
 ### SQL — SELECT
 
 ```sql
-SELECT cg.pkid, cg.Description
-FROM CourseGroup cg
-ORDER BY cg.pkid ASC
+SELECT g.pkid, g.Description,
+       (SELECT COUNT(*) FROM Course c WHERE c.CourseGroup_pkid = g.pkid) AS CourseCount,
+       (SELECT COUNT(*) FROM PartnerCourseGroup p WHERE p.CourseGroup_pkid = g.pkid) AS PartnerCourseGroupCount
+FROM CourseGroup g
 ```
 
-Query adds: `WHERE (@Keyword IS NULL OR cg.Description LIKE @Keyword)`.
-
-No `nchar` columns, so no `RTRIM()` needed. No `date`/`time` columns.
+- Query: append `WHERE g.Description LIKE @Keyword` (`%keyword%`) when keyword present.
+- Default `ORDER BY g.pkid DESC` for list/query; lookup uses `ORDER BY pkid ASC`.
+- No `nchar` columns → no `RTRIM()` needed. No date/time columns.
 
 ### SQL — INSERT
 
 ```sql
-INSERT INTO CourseGroup (Description)
-VALUES (@Description);
+INSERT INTO CourseGroup (Description) VALUES (@Description);
 SELECT CAST(SCOPE_IDENTITY() AS smallint);
 ```
-
-`pkid` is IDENTITY — excluded from INSERT; re-read via `GetByIdAsync(newPkid)`.
 
 ### SQL — UPDATE
 
 ```sql
-UPDATE CourseGroup
-SET Description = @Description
-WHERE pkid = @Pkid;
+UPDATE CourseGroup SET Description = @Description WHERE pkid = @Pkid;
 ```
 
-`pkid` immutable — appears only in the `WHERE`.
-
-### Lookup SQL
+### SQL — DELETE
 
 ```sql
-SELECT pkid, Description FROM CourseGroup ORDER BY Description ASC
+DELETE FROM CourseGroup WHERE pkid = @Pkid;
 ```
 
-### Registration
+Wrap in try/catch at controller level: `SqlException` number 547 (FK violation
+from `PartnerCourseGroup`) → `409 Conflict`. Note the `Course` FK cascades, so
+courses in the group are silently removed by SQL Server — this is schema-defined
+behavior, warned about in the delete confirmation dialog.
 
-Add to `Program.cs`: `AddScoped<ICourseGroupRepository, CourseGroupRepository>()`. Extend the
-existing `ILookupRepository`/`LookupRepository`/`LookupsController` with the course-groups endpoint.
+### Special Column Notes
+
+- No RowAudit in this codebase — mirror AppRole exactly (no audit writer).
+- No DateOnly/TimeOnly columns; type handlers already registered but unused here.
 
 ---
 
 ## Frontend Notes
 
-### Angular model (`course-group.model.ts`)
+### Angular Model
 
 ```ts
 export interface CourseGroup {
   pkid: number;
   description: string;
+  courseCount: number;
+  partnerCourseGroupCount: number;
 }
+
 export interface CourseGroupRequest {
   pkid: number;
   description: string;
 }
+
 export interface CourseGroupQuery {
   keyword?: string | null;
 }
 ```
 
-Plus `course-group-lookup.model.ts`: `{ pkid: number; description: string }`.
+### Routes
 
-### Route table (`app.routes.ts`)
+| Path | Component |
+|------|-----------|
+| `/course-groups` | course-group-list |
+| `/course-groups/new` | course-group-form (**before** `:id`) |
+| `/course-groups/:id` | course-group-detail |
+| `/course-groups/:id/edit` | course-group-form |
 
-| Path | Component | Notes |
-|------|-----------|-------|
-| `course-groups` | `CourseGroupList` | list |
-| `course-groups/new` | `CourseGroupForm` | **before** `:id` |
-| `course-groups/:id/edit` | `CourseGroupForm` | edit |
-| `course-groups/:id` | `CourseGroupDetail` | detail |
+Numeric PK → no `encodeURIComponent` needed in the service (plain interpolation,
+matching an int-PK entity; keep the service methods symmetrical with AppRole's).
 
-### List component
+### List Component
 
-- Columns: 主代碼 (pkid), 群組名稱 (description, links to detail), 操作.
-- Filter drawer: single 關鍵字 input.
-- Session storage: `course-group-list-filters`, `course-group-list-sort`, `course-group-list-page`.
-- Default sort `pkid` ASC.
-- Delete confirm: `確定要刪除主代碼 <b>${item.pkid}</b>「${item.description}」？`
+- Columns: 主代碼 (pkid, sortable), 群組名稱 (description, sortable),
+  課程數 (courseCount), 廠商群組數 (partnerCourseGroupCount), actions (view/edit/delete).
+- `p-table` sortable + paginated; `p-drawer` filter with the single keyword field.
+- Default sort: `pkid` descending.
+- Session storage keys: `course-group-list-filters`, `course-group-list-sort`,
+  `course-group-list-page`.
+- No lookups needed on init (no FK columns) — no `forkJoin` required in the list.
 
-### Detail component
+### Delete Confirmation Message
 
-Plain `dl` grid of all fields (mirrors `partner-detail`). No primary-foreign
-link buttons in this pass (children not built).
+Must mention the cascade:
 
-### Form component
+```
+確定要刪除主代碼 <b>${item.pkid}</b>「${item.description}」？
+群組內的 ${item.courseCount} 筆課程將一併刪除。
+```
 
-- Reactive Forms; no `forkJoin` needed (no lookups to load).
-- `pkid`: **hidden in add mode** (IDENTITY, server-assigned); shown **disabled** in edit
-  mode. Read back with `getRawValue()` for the update payload. Mirrors `Partner`.
-- Fields: 群組名稱 (required, maxlength 100).
-- No 409 handling needed on create (IDENTITY PK).
+On API `409` → toast error: 該群組仍被廠商課程群組引用，無法刪除。
 
-### Sidebar placement
+### Form Component
 
-Add item `課程群組 CourseGroup` (`icon: pi pi-sitemap`, `route: /course-groups`) as a
-**level-3 child** of the `課程管理 Course` collapsible group, which lives under the
-`功能選單` section in `app.ts` (alongside `合作廠商 Partner`).
+- Reactive Forms; single field: 群組名稱 (`description`) — `pt-inputtext`,
+  required, maxlength 100.
+- No lookups → no `forkJoin` needed; edit mode loads the record only.
+- pkid displayed read-only (主代碼) in edit mode; not part of the editable form
+  (IDENTITY int — unlike AppRole's string PK there is nothing to disable/getRawValue).
+- Sticky `p-toolbar` with 儲存 / 取消, same as AppRole form.
 
-The sidebar supports three levels: section title (L1) → item (L2) → `item.children`
-(L3). Course features nest under the `課程管理 Course` L2 group rather than getting
-their own L1 section — see [Partner.md](Partner.md) for the history.
+### Detail Component
 
-### Lookup service
+- Card showing 主代碼, 群組名稱, 課程數, 廠商群組數.
+- Toolbar: 編輯 / 刪除 / 返回列表 buttons (mirror AppRole detail).
+- Child navigation buttons deferred until Course / PartnerCourseGroup features exist.
 
-Add `getCourseGroups(): Observable<CourseGroupLookup[]>` → `GET /api/lookups/course-groups`.
+### Sidebar
+
+Add under nav group **課程管理 Course** — the group does not exist yet in `app.ts`;
+create it below 系統管理 Admin with item 課程群組 → `/course-groups`
+(icon suggestion: `pi pi-tags`).
+
+---
+
+## Session Storage Keys
+
+| Key | Contents |
+|-----|----------|
+| `course-group-list-filters` | Last query filter values (`{ keyword }`) |
+| `course-group-list-sort` | `{ sortField, sortOrder }` |
+| `course-group-list-page` | `{ first, rows }` |
+
+No incoming cross-entity query params yet (Course list will later link **to**
+`/course-groups`? No — links flow the other way; nothing overrides saved state).
 
 ---
 
 ## Tests
 
-### Backend (`CMS.API.Tests/CourseGroupsControllerTests.cs`)
+### Backend (CMS.API.Tests, xUnit + Moq — mock `ICourseGroupRepository`)
 
-xUnit + Moq (strict), repository mocked, no DB. Cover: GetAll, Query (keyword passed
-through), GetById found/not-found, Create → CreatedAtAction, Update existing/missing,
-Delete existing/missing. (No 409 test — IDENTITY PK, no Exists check.)
+`CourseGroupsControllerTests`:
+- `GetAll` → 200 with list
+- `Query` with keyword → 200, repository receives the query object
+- `GetById` found → 200 with entity; not found → 404
+- `Create` → 201 with created entity (CreatedAtAction)
+- `Update` existing → 204 (or 200 per AppRole pattern); not found → 404
+- `Delete` existing → 204; not found → 404
+- Required-field 400: `Description` missing/empty fails model validation
 
-### Frontend
+### Frontend (Karma + Jasmine)
 
-- `course-group.service.spec.ts` — assert each method hits the right URL/verb (`getById`,
-  `delete` use numeric pkid, no `encodeURIComponent`).
-- `course-group-list.spec.ts`, `course-group-detail.spec.ts`, `course-group-form.spec.ts` — mount with
-  a mocked service; list renders rows + filter persistence; detail loads by id;
-  form add-mode (pkid hidden) creates, edit-mode disables pkid and updates.
+- `course-group.service.spec.ts` — `HttpTestingController`: each method hits
+  the right URL/verb (`/api/course-groups`, `/query`, `/{id}`, POST/PUT/DELETE).
+- `course-group-list.spec.ts` — renders with mocked service; delete confirm fires.
+- `course-group-detail.spec.ts` — renders record fields with mocked service.
+- `course-group-form.spec.ts` — required `description` invalid when empty;
+  save disabled/blocked until valid.
 
 ---
 
-## Files to create / modify
+## Files to Create / Modify
 
-**Backend (create):** `Models/CourseGroup.cs`, `Models/CourseGroupRequest.cs`,
-`Models/CourseGroupQuery.cs`, `Models/CourseGroupLookup.cs`, `Repositories/ICourseGroupRepository.cs`,
-`Repositories/CourseGroupRepository.cs`, `Controllers/CourseGroupsController.cs`,
-`CMS.API.Tests/CourseGroupsControllerTests.cs`.
-**Backend (modify):** `Program.cs` (DI), `Repositories/ILookupRepository.cs`,
-`Repositories/LookupRepository.cs`, `Controllers/LookupsController.cs` (course-groups lookup).
-
-**Frontend (create):** `core/models/course-group.model.ts`, `core/models/course-group-lookup.model.ts`,
-`core/services/course-group.service.ts` (+ `.spec.ts`), `features/course-groups/course-group-list/*`,
-`features/course-groups/course-group-detail/*`, `features/course-groups/course-group-form/*` (+ `.spec.ts` each).
-**Frontend (modify):** `app.routes.ts` (routes), `app.ts` (sidebar item),
-`core/services/lookup.service.ts` (getCourseGroups).
+| # | File | Action |
+|---|------|--------|
+| 1 | `src/CMS.API/Models/CourseGroup.cs` | create |
+| 2 | `src/CMS.API/Models/CourseGroupRequest.cs` | create |
+| 3 | `src/CMS.API/Models/CourseGroupQuery.cs` | create |
+| 4 | `src/CMS.API/Repositories/ICourseGroupRepository.cs` | create |
+| 5 | `src/CMS.API/Repositories/CourseGroupRepository.cs` | create |
+| 6 | `src/CMS.API/Controllers/CourseGroupsController.cs` | create |
+| 7 | `src/CMS.API/Program.cs` | modify — register repository DI |
+| 8 | `src/CMS.API/Controllers/LookupsController.cs` | modify — add `GET /api/lookups/course-groups` |
+| 9 | `src/CMS.API/Repositories/ILookupRepository.cs` + impl | modify — add course-groups lookup |
+| 10 | `src/CMS.API.Tests/CourseGroupsControllerTests.cs` | create |
+| 11 | `src/CMS.NG/src/app/core/models/course-group.model.ts` | create |
+| 12 | `src/CMS.NG/src/app/core/services/course-group.service.ts` | create (+ `.spec.ts`) |
+| 13 | `src/CMS.NG/src/app/features/course-groups/course-group-list/` | create (+ `.spec.ts`) |
+| 14 | `src/CMS.NG/src/app/features/course-groups/course-group-detail/` | create (+ `.spec.ts`) |
+| 15 | `src/CMS.NG/src/app/features/course-groups/course-group-form/` | create (+ `.spec.ts`) |
+| 16 | `src/CMS.NG/src/app/app.routes.ts` | modify — lazy routes (`/new` before `/:id`) |
+| 17 | `src/CMS.NG/src/app/app.ts` | modify — add 課程管理 Course nav group + 課程群組 item |

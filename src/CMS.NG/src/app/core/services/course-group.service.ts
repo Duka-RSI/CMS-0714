@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '@env/environment';
 import { CourseGroup, CourseGroupQuery, CourseGroupRequest } from '@app/core/models/course-group.model';
 
-/** Data access for the CourseGroup API. pkid is a smallint IDENTITY numeric PK. */
+/** Data access for the CourseGroup API. Pkid is a numeric PK (no URL encoding needed). */
 @Injectable({ providedIn: 'root' })
 export class CourseGroupService {
   private readonly http = inject(HttpClient);

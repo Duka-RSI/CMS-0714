@@ -5,7 +5,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Observable } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
-import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageModule } from 'primeng/message';
 import { MessageService } from 'primeng/api';
 
@@ -14,14 +13,7 @@ import { CourseGroupService } from '@app/core/services/course-group.service';
 
 @Component({
   selector: 'app-course-group-form',
-  imports: [
-    CommonModule,
-    ReactiveFormsModule,
-    ButtonModule,
-    InputTextModule,
-    InputNumberModule,
-    MessageModule,
-  ],
+  imports: [CommonModule, ReactiveFormsModule, ButtonModule, InputTextModule, MessageModule],
   templateUrl: './course-group-form.html',
   styleUrl: './course-group-form.scss',
 })
@@ -35,43 +27,38 @@ export class CourseGroupForm implements OnInit {
   protected readonly isEdit = signal(false);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+  /** Shown read-only in the header in edit mode (IDENTITY PK, never editable). */
+  protected readonly pkid = signal<number | null>(null);
 
-  // pkid is IDENTITY: hidden in add mode, shown disabled in edit mode.
   protected readonly form = this.fb.group({
-    pkid: this.fb.control<number | null>(null),
-    description: this.fb.control('', {
-      validators: [Validators.required, Validators.maxLength(100)],
-    }),
+    description: this.fb.control('', { validators: [Validators.required, Validators.maxLength(100)] }),
   });
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     this.isEdit.set(!!id);
 
-    if (id) {
-      this.service.getById(Number(id)).subscribe({
-        next: (courseGroup) => {
-          this.form.patchValue({
-            pkid: courseGroup.pkid,
-            description: courseGroup.description,
-          });
-          // pkid is the IDENTITY primary key — immutable in edit mode.
-          this.form.controls.pkid.disable();
-          this.loading.set(false);
-        },
-        error: () => {
-          this.loading.set(false);
-          this.messageService.add({
-            severity: 'error',
-            summary: '載入失敗',
-            detail: '無法載入表單資料。',
-          });
-          this.router.navigate(['/course-groups']);
-        },
-      });
-    } else {
+    if (!id) {
       this.loading.set(false);
+      return;
     }
+
+    this.service.getById(Number(id)).subscribe({
+      next: (group) => {
+        this.pkid.set(group.pkid);
+        this.form.patchValue({ description: group.description });
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loading.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: '載入失敗',
+          detail: '無法載入表單資料。',
+        });
+        this.router.navigate(['/course-groups']);
+      },
+    });
   }
 
   save(): void {
@@ -80,11 +67,9 @@ export class CourseGroupForm implements OnInit {
       return;
     }
 
-    // getRawValue() includes the disabled pkid control (needed for update).
-    const raw = this.form.getRawValue();
     const request: CourseGroupRequest = {
-      pkid: raw.pkid ?? 0,
-      description: raw.description!,
+      pkid: this.pkid() ?? 0,
+      description: this.form.controls.description.value!,
     };
 
     this.saving.set(true);
