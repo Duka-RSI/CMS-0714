@@ -2,6 +2,18 @@
   <div class="page-header">
     <h1 class="title">{{ isEdit() ? '編輯使用者' : '新增使用者' }}</h1>
     <div class="actions">
+      @if (canResetPassword()) {
+        <p-button
+          type="button"
+          label="重設密碼"
+          icon="pi pi-key"
+          severity="warn"
+          [outlined]="true"
+          [loading]="resettingPassword()"
+          (onClick)="confirmResetPassword()"
+          data-testid="reset-password"
+        />
+      }
       <p-button
         type="button"
         label="取消"

@@ -148,6 +148,24 @@ Complexity limits guessing; it does not redeem unsalted SHA-256 as a KDF (see `A
 > The policy is currently unconditional. Wiring the flag was not asked for and would let a
 > config edit silently disable complexity — raise it before binding it.
 
+### Resetting another user's password to the default
+
+`POST /api/app-users/{id}/reset-password` — Admin only, by virtue of `AppUsersController`'s
+`[Authorize(Roles="Admin")]`. It predates this work (see `AppUser.md`); the only thing added
+here was the button on the **edit form**, alongside the one the list already had. Both call
+the same endpoint, so there is no second route to keep in step.
+
+The client sends **only the UserId** and receives 204: the default password is read at
+runtime from SysConfig `appConfig` inside `AppUserRepository.ResetPasswordAsync`, hashed
+there, and never travels in either direction.
+
+**Test coverage note.** `ResetPassword_WithANonAdminToken_Returns403AndResetsNothing` and
+`ResetPassword_WithAnAdminToken_Returns204AndLeaksNoHash` drive the real pipeline with a
+mocked `IAppUserRepository`, so they prove the authorization and the empty body but *not*
+that the stored hash is SHA-256 of the SysConfig default — that happens inside the
+repository's SQL. This repo has no database test harness, so that assertion is made against
+the live database instead (below).
+
 ### PublishStatuses is Admin-only, its lookup is not
 
 `/api/publish-statuses` (the maintenance CRUD) requires Admin; the non-admin Course and
@@ -261,6 +279,18 @@ confirmation → 400 — and after all four, `PasswordHash` and `PasswordUpdated
 logged in (401) and the new one did (200). In the browser, a non-compliant or mismatched
 entry was refused client-side with no request sent, and a successful change cleared all
 three fields and kept the session.
+
+Reset-to-default, against the real database, on a throwaway user whose hash had been set to
+junk: no token → 401; a non-Admin token → **403 with the hash unchanged**; an Admin token →
+204 with a zero-byte body, after which `PasswordHash` equalled
+`SHA256(JSON_VALUE(SysConfig.configValue, '$.defaultPassword'))`, `PasswordUpdatedTime` was
+stamped, and the user could log in with the default password.
+
+> Not verified: that the reset *re-reads* SysConfig rather than caching. Proving it would
+> mean temporarily rewriting the `appConfig` row, which also holds the JWT signing secret —
+> not worth touching a live config row for. The code path (`SysConfigRepository` SELECTs on
+> every `GetAppConfigAsync`, which `ResetPasswordAsync` calls per reset) is plain enough to
+> read.
 
 Profile, against the real database: `PUT /api/Auth/profile` with no token → 401; as `test`
 with a body of `{"userId":"miles@uuu.com.tw","roleIds":["Admin"],"userName":"  孫小明  "}`

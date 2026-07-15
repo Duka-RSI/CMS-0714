@@ -370,6 +370,8 @@ String PK → the service `encodeURIComponent`s the id in `getById` / `delete` /
 - **重設密碼 button** (`pi pi-key`) per row → confirm
   `確定要將使用者 <b>${item.userId}</b>「${item.userName}」的密碼重設為系統預設密碼？`
   → `resetPassword(userId)` → success toast → reload.
+  The **edit form carries the same action** in its toolbar (same wording, same endpoint) —
+  see the Form section.
 
 ### Detail component
 
@@ -386,6 +388,15 @@ No password field. Loads the app-roles lookup to render role names.
 - **No password field at all** — on create the backend assigns the default hash.
   An add-mode hint tells the admin: 新使用者將以系統預設密碼建立。
 - 409 handling on create → error toast 使用者代碼已存在。
+- **重設密碼 button** in the toolbar (`pi pi-key`, `severity="warn"`), shown only when
+  `isEdit() && auth.isAdmin()` — add mode has no user to reset yet. Confirms with the same
+  wording as the list, then posts to the same
+  `POST /api/app-users/{id}/reset-password`; the client sends **only the UserId** and gets
+  204 back. The UserId is read via `getRawValue()` because the control is disabled in edit
+  mode. A 403 is reported as 您沒有重設密碼的權限。
+  > Hiding the button is an affordance only — `AppUsersController` is
+  > `[Authorize(Roles="Admin")]`, so a non-Admin gets 403 whatever the form renders. That
+  > enforcement is what the pipeline tests assert.
 
 ### Sidebar placement
 
@@ -425,7 +436,10 @@ it does not need a DB.
   delete confirm, **reset-password confirm calls the service**.
 - `app-user-detail.spec.ts` — loads by id, renders role names, no password shown.
 - `app-user-form.spec.ts` — add mode creates (userId enabled); edit mode disables userId
-  and updates; asserts **no password control exists** on the form.
+  and updates; asserts **no password control exists** on the form; the 重設密碼 button
+  shows for an Admin editing a user and is absent for a non-Admin, for a role-less user,
+  for the look-alike role `Administrator`, and in add mode; it confirms first, then sends
+  only the UserId.
 
 ---
 

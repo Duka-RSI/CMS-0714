@@ -38,6 +38,7 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
         public Mock<IAuthRepository> AuthRepository { get; } = new();
         public Mock<IAppRoleRepository> AppRoleRepository { get; } = new();
         public Mock<ICourseRepository> CourseRepository { get; } = new();
+        public Mock<IAppUserRepository> AppUserRepository { get; } = new();
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -59,6 +60,8 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
                 services.AddScoped(_ => AppRoleRepository.Object);
                 services.RemoveAll<ICourseRepository>();
                 services.AddScoped(_ => CourseRepository.Object);
+                services.RemoveAll<IAppUserRepository>();
+                services.AddScoped(_ => AppUserRepository.Object);
             });
         }
     }
@@ -290,6 +293,62 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
 
         // Proves the "role" claim survives validation and reaches [Authorize(Roles = "Admin")].
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // ----- Reset a user's password to the SysConfig default (Admin only) -----
+
+    [Fact]
+    public async Task ResetPassword_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsync("/api/app-users/test/reset-password", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WithANonAdminToken_Returns403AndResetsNothing()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+        _factory.AppUserRepository.Invocations.Clear();
+
+        var response = await ClientWithToken(token).PostAsync("/api/app-users/test/reset-password", null);
+
+        // Enforced by the API, not by hiding the button.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        _factory.AppUserRepository.Verify(
+            r => r.ResetPasswordAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WithAnAdminToken_Returns204AndLeaksNoHash()
+    {
+        _factory.AppUserRepository
+            .Setup(r => r.ResetPasswordAsync("test", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var token = await LoginAsync(_factory.CreateClient(), "Admin");
+
+        var response = await ClientWithToken(token).PostAsync("/api/app-users/test/reset-password", null);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        // Success/failure only — no password and no hash come back.
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+        _factory.AppUserRepository.Verify(
+            r => r.ResetPasswordAsync("test", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ResetPassword_ForAnUnknownUser_Returns404()
+    {
+        _factory.AppUserRepository
+            .Setup(r => r.ResetPasswordAsync("ghost", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var token = await LoginAsync(_factory.CreateClient(), "Admin");
+
+        var response = await ClientWithToken(token).PostAsync("/api/app-users/ghost/reset-password", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

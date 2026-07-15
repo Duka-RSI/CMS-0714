@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -9,11 +9,12 @@ import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { MessageModule } from 'primeng/message';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 
 import { AppUserRequest } from '@app/core/models/app-user.model';
 import { AppRoleLookup } from '@app/core/models/app-role-lookup.model';
 import { AppUserService } from '@app/core/services/app-user.service';
+import { AuthService } from '@app/core/services/auth.service';
 import { LookupService } from '@app/core/services/lookup.service';
 
 interface RoleOption {
@@ -42,11 +43,22 @@ export class AppUserForm implements OnInit {
   private readonly service = inject(AppUserService);
   private readonly lookupService = inject(LookupService);
   private readonly messageService = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly auth = inject(AuthService);
 
   protected readonly isEdit = signal(false);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+  protected readonly resettingPassword = signal(false);
   protected readonly roleOptions = signal<RoleOption[]>([]);
+
+  /**
+   * Reset-to-default is Admin-only and needs an existing user, so it is hidden in add mode.
+   *
+   * Hiding it is an affordance: /api/app-users is [Authorize(Roles="Admin")], so a non-Admin
+   * gets a 403 from the endpoint regardless of what the form renders.
+   */
+  protected readonly canResetPassword = computed(() => this.isEdit() && this.auth.isAdmin());
 
   // No password control: the backend owns PasswordHash entirely.
   protected readonly form = this.fb.group({
@@ -138,5 +150,50 @@ export class AppUserForm implements OnInit {
 
   cancel(): void {
     this.router.navigate(['/app-users']);
+  }
+
+  /**
+   * Resets the edited user's password to the SysConfig default. Same wording as the list
+   * page's per-row action, and the same endpoint.
+   */
+  confirmResetPassword(): void {
+    // getRawValue(): userId is disabled in edit mode, so .value would not carry it.
+    const raw = this.form.getRawValue();
+    const userId = raw.userId!;
+    const userName = raw.userName ?? '';
+
+    this.confirmationService.confirm({
+      header: '重設密碼確認',
+      message: `確定要將使用者 <b>${userId}</b>「${userName}」的密碼重設為系統預設密碼？`,
+      icon: 'pi pi-key',
+      acceptLabel: '重設',
+      rejectLabel: '取消',
+      acceptButtonStyleClass: 'p-button-warn',
+      accept: () => this.resetPassword(userId, userName),
+    });
+  }
+
+  private resetPassword(userId: string, userName: string): void {
+    this.resettingPassword.set(true);
+
+    // Only the UserId goes out; the server owns the default password and returns 204.
+    this.service.resetPassword(userId).subscribe({
+      next: () => {
+        this.resettingPassword.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: '重設成功',
+          detail: `使用者「${userName}」的密碼已重設為系統預設密碼。`,
+        });
+      },
+      error: (err: HttpErrorResponse) => {
+        this.resettingPassword.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: '重設失敗',
+          detail: err.status === 403 ? '您沒有重設密碼的權限。' : '重設密碼時發生錯誤。',
+        });
+      },
+    });
   }
 }
