@@ -1,7 +1,12 @@
 import { Routes } from '@angular/router';
+import { authGuard } from '@app/core/guards/auth.guard';
 
-export const routes: Routes = [
-  { path: '', redirectTo: 'app-roles', pathMatch: 'full' },
+/**
+ * Routes that require a session. Landing on 'courses' rather than 'app-roles': app-roles
+ * is an Admin-only API, so a non-Admin landing there would meet a 403 on first paint.
+ */
+const protectedRoutes: Routes = [
+  { path: '', redirectTo: 'courses', pathMatch: 'full' },
   {
     path: 'app-roles',
     loadComponent: () =>
@@ -152,5 +157,20 @@ export const routes: Routes = [
         (m) => m.PublishStatusDetail,
       ),
   },
-  { path: '**', redirectTo: 'app-roles' },
+  { path: '**', redirectTo: 'courses' },
+];
+
+export const routes: Routes = [
+  {
+    // The only public route.
+    path: 'login',
+    loadComponent: () => import('@app/features/auth/login/login').then((m) => m.Login),
+  },
+  {
+    // canActivateChild rather than canActivate: it re-runs on every child navigation, and
+    // any route added to protectedRoutes later is guarded without anyone remembering to.
+    path: '',
+    canActivateChild: [authGuard],
+    children: protectedRoutes,
+  },
 ];

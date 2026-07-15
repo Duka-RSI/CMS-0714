@@ -145,8 +145,11 @@ and `PasswordHash` is NOT NULL).
 JSON is parsed case-insensitively (`PropertyNameCaseInsensitive = true`) since the stored
 keys are camelCase.
 
-> `appConfig` also holds a `symmetricSecurityKey` (JWT signing secret). Only
-> `defaultPassword` is read; the model deliberately does not bind the other properties.
+> `appConfig` also holds a `symmetricSecurityKey` (JWT signing secret) and an
+> `enforcePasswordPolicy` flag. This feature reads only `defaultPassword`; the login
+> feature binds `symmetricSecurityKey` too (see `spec/auth/Login.md`). `AppConfig` is
+> backend-only and is never returned by an endpoint — that, not the absence of the
+> property, is what keeps the secret from leaking.
 
 ---
 
@@ -188,8 +191,9 @@ No FK filters (no outbound FKs). No date-range filter on `PasswordUpdatedTime`
 
 - **409 on create**: `UserId` is a user-assigned string PK → `ExistsAsync` guard, mirroring
   `AppRolesController.Create`.
-- No auth attributes (matches AppRole/PublishStatus/Partner — this codebase has no auth
-  pipeline wired yet).
+- **`[Authorize(Roles = "Admin")]` on the whole controller** (mirrors AppRole and
+  PublishStatus): managing accounts and resetting passwords is Admins-only. Non-Admins get
+  403. See `spec/auth/Authorization.md`.
 
 ---
 

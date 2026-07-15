@@ -1,6 +1,11 @@
 using CMS.API.Data;
 using CMS.API.Repositories;
+using CMS.API.Security;
 using Dapper;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +22,28 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new() { Title = "CMS.API", Version = "v1" });
+
+    // Lets Swagger UI's "Authorize" button attach a login token to protected endpoints.
+    options.AddSecurityDefinition(JwtBearerDefaults.AuthenticationScheme, new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "貼上 POST /api/Auth/login 回傳的 accessToken(不需自行加 'Bearer ' 前綴)。",
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
+            {
+                Type = ReferenceType.SecurityScheme,
+                Id = JwtBearerDefaults.AuthenticationScheme,
+            },
+        }] = []
+    });
 });
 
 // Data access
@@ -30,6 +57,47 @@ builder.Services.AddScoped<ICourseGroupRepository, CourseGroupRepository>();
 builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IFeaturedPromoItemRepository, FeaturedPromoItemRepository>();
 builder.Services.AddScoped<ILookupRepository, LookupRepository>();
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+
+// Login / token issuing
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ISigningKeyProvider, SigningKeyProvider>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+
+// --- Authentication: bearer tokens signed with the SysConfig 'appConfig' secret ---
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer();
+
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<ISigningKeyProvider>((options, signingKeys) =>
+    {
+        // Keep "sub"/"name"/"role" verbatim instead of remapping them to ClaimTypes.* URIs.
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            // This API is the only issuer and the only consumer, so there is no iss/aud to check.
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            NameClaimType = JwtTokenService.UserNameClaimType,
+            RoleClaimType = JwtTokenService.RoleClaimType,
+            // Resolved per validation (off a cached key) so rotating the SysConfig row
+            // takes effect without a restart.
+            IssuerSigningKeyResolver = (_, _, _, _) => [signingKeys.Get()],
+            ClockSkew = TimeSpan.FromMinutes(1),
+        };
+    });
+
+// --- Authorization: every endpoint requires a login unless it opts out ---
+// FallbackPolicy applies only to endpoints carrying no authorization metadata, so
+// [AllowAnonymous] on AuthController and [Authorize(Roles=...)] elsewhere both win.
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 // CORS — allow the Angular dev server (and any localhost origin) during development.
 builder.Services.AddCors(options =>
@@ -51,6 +119,8 @@ app.UseSwaggerUI(options =>
 });
 
 app.UseCors(CorsPolicy);
+// Order matters: authentication establishes who the caller is, authorization then judges them.
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

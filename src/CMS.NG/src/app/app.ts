@@ -1,7 +1,11 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map } from 'rxjs';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
+
+import { AuthService } from '@app/core/services/auth.service';
 
 interface MenuItem {
   label: string;
@@ -16,6 +20,8 @@ interface MenuItem {
 interface MenuSection {
   title: string;
   items: MenuItem[];
+  /** Hidden entirely from non-Admins. The API enforces the same restriction. */
+  adminOnly?: boolean;
 }
 
 @Component({
@@ -25,8 +31,22 @@ interface MenuSection {
   styleUrl: './app.scss',
 })
 export class App {
+  private readonly router = inject(Router);
+  protected readonly auth = inject(AuthService);
+
   protected readonly title = signal('UWA');
   protected readonly sidebarCollapsed = signal(false);
+
+  private readonly currentUrl = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this.router.url },
+  );
+
+  /** The login page renders on its own — no sidebar to navigate with before signing in. */
+  protected readonly showShell = computed(() => !this.currentUrl().startsWith('/login'));
 
   // Ultima-style sidebar. Three levels are supported:
   //   section title (L1) → item (L2) → item.children (L3).
@@ -68,6 +88,7 @@ export class App {
     },
     {
       title: '系統管理 Admin',
+      adminOnly: true,
       items: [
         {
           // Level-2 collapsible group → level-3 links.
@@ -84,6 +105,14 @@ export class App {
     },
   ]);
 
+  /**
+   * The menu as this user may see it. Hiding the 系統管理 section is a convenience — the
+   * API rejects non-Admins on those endpoints regardless of what the menu shows.
+   */
+  protected readonly visibleMenu = computed(() =>
+    this.menu().filter((section) => !section.adminOnly || this.auth.isAdmin()),
+  );
+
   toggleSidebar(): void {
     this.sidebarCollapsed.update((v) => !v);
   }
@@ -95,5 +124,10 @@ export class App {
     item.expanded = !item.expanded;
     // Force the signal to re-emit so the template re-renders the mutated item.
     this.menu.update((sections) => [...sections]);
+  }
+
+  logout(): void {
+    this.auth.logout();
+    this.router.navigateByUrl('/login');
   }
 }

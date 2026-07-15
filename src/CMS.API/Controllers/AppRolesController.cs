@@ -1,11 +1,16 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using CMS.API.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
 
+// 系統管理 feature: Admins only. The sidebar hides it for everyone else, but that is a UI
+// affordance — this attribute is what actually enforces it.
 [ApiController]
 [Route("api/app-roles")]
+[Authorize(Roles = RoleNames.Admin)]
 public class AppRolesController : ControllerBase
 {
     private readonly IAppRoleRepository _repository;

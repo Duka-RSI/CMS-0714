@@ -1,11 +1,17 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using CMS.API.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
 
+// 系統管理 feature: Admins only. Note this restricts the *maintenance* CRUD only — the
+// non-admin Course/FeaturedPromoItem forms read statuses via /api/lookups/publish-statuses,
+// which stays open to any logged-in user.
 [ApiController]
 [Route("api/publish-statuses")]
+[Authorize(Roles = RoleNames.Admin)]
 public class PublishStatusesController : ControllerBase
 {
     private readonly IPublishStatusRepository _repository;

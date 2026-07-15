@@ -54,8 +54,18 @@ worked examples and `backend-conventions.md` for the API side.
     `[showClear]="true"` on nullable FKs) and refresh the row's joined label after save.
   - Editable cells must not contain click-to-navigate links — the first click of the
     double-click would navigate. Keep row navigation on the 操作-column buttons.
-- **Routing**: lazy `loadComponent`. Order `.../new` **before** `.../:id`.
+- **Routing**: lazy `loadComponent`. Order `.../new` **before** `.../:id`. All app routes
+  live in `protectedRoutes` under one pathless `canActivateChild: [authGuard]` parent;
+  `login` is the only public route.
+- **Auth** (see `spec/auth/Authorization.md`): the session lives in **sessionStorage**
+  (`auth-profile`); `AuthService` exposes `isAuthenticated`/`userName`/`roles`/`isAdmin`
+  signals, with roles decoded from the JWT — never a separate API call. A bearer
+  interceptor, a 401→sign-out interceptor and `authGuard` are wired globally, so a new
+  feature route needs no auth work: add it to `protectedRoutes` and it is guarded.
+  Admin-only menu sections carry `adminOnly: true` — never match on the Chinese title.
 - **Sidebar**: data-driven nav in `app.ts`; add each feature under its group
   (e.g. AppRole lives under `系統管理 Admin`, Partner under `課程管理 Course`).
 - **Bundle budget** was raised to 1MB/2MB because PrimeNG's Aura theme pushes the
-  initial bundle to ~650kB.
+  initial bundle to ~650kB. `anyComponentStyle` was raised 4kB → 6kB (warning; the 8kB
+  error ceiling stands): `app.scss` owns the entire sidebar layout and already sat at
+  ~3.98kB, so the signed-in user block tipped it over.

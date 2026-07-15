@@ -55,6 +55,10 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
   example); routing; sidebar; bundle budget.
 - `spec/reference-features.md` — worked features + their quirks; deferred FK-link
   buttons; the "adding a feature" workflow.
+- `spec/auth/Login.md` — the login endpoint: credential check, JWT claims/lifetime, the
+  SysConfig signing secret, and why auth gets its own repository.
+- `spec/auth/Authorization.md` — the JWT pipeline end-to-end: global "must be logged in"
+  policy, Admin-only controllers, and the NG login page / guard / interceptors.
 - `spec/code-gen.convention.md` — terse code-gen checklist.
 - `spec/feature-spec.template.md` — spec sections to fill when analysing a table.
 
@@ -69,6 +73,16 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
   locks `CMS.API.exe` (MSB3027); `taskkill /PID <pid> /F`, rebuild, restart.
 - **No RowAudit infrastructure exists** despite the `/crud` skill mentioning it — don't
   add audit logging.
+- **The API is closed by default.** A global `FallbackPolicy` requires a logged-in caller
+  on every endpoint; `AuthController` is the only `[AllowAnonymous]` one, and
+  AppRoles/AppUsers/PublishStatuses additionally need the `Admin` role. A new controller is
+  therefore protected automatically — and unreachable from the frontend until the user logs
+  in. Tests that call an endpoint over HTTP need a bearer token.
+- **`MapInboundClaims = false` is load-bearing** — with the default, IdentityModel rewrites
+  the `role` claim to a URI and every `[Authorize(Roles=...)]` silently rejects. See
+  `spec/auth/Authorization.md`.
+- **`PasswordHash` may only be read via `AuthRepository`**; `AppUserRepository` must keep
+  never selecting it. See `spec/auth/Login.md`.
 - **Update endpoints sync N-N sets from the request** — never build a PUT from a list
   row (its N-N pkid arrays are empty; they load on GET-by-id only). Fetch the full
   record, merge, then PUT — otherwise the links are silently wiped.

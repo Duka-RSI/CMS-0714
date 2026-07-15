@@ -307,3 +307,81 @@
   overflow: auto;
   padding: 20px 24px;
 }
+
+/* ---------- Signed-in user (sidebar footer) ---------- */
+.sidebar-user {
+  /* The auto top margin pins the block to the bottom, however short the menu is. */
+  margin: auto 12px 12px;
+  padding: 14px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.sidebar-user .user-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.875rem;
+}
+
+.sidebar-user .user-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sidebar-user .user-name,
+.sidebar-user .user-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-user .user-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.sidebar-user .user-id {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.sidebar-user .logout-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-user .logout-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Slim mode: only the avatar and the logout icon survive. */
+.layout-slim .sidebar-user {
+  flex-direction: column;
+  gap: 6px;
+  margin: auto 8px 12px;
+  padding: 12px 0 0;
+}
+
+.layout-slim .sidebar-user .user-meta {
+  display: none;
+}

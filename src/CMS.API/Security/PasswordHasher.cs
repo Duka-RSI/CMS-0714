@@ -25,4 +25,27 @@ public static class PasswordHasher
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(plaintext));
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
+
+    /// <summary>
+    /// True when <paramref name="plaintext"/> hashes to <paramref name="storedHash"/>.
+    /// </summary>
+    /// <remarks>
+    /// Compares in fixed time so the login path cannot be used as an oracle that leaks how
+    /// much of a hash a guess got right. Case-insensitive on the stored side only in the
+    /// sense that Hash() always emits lower-case hex; a stored value in another encoding
+    /// simply will not match (see the encoding note above).
+    /// </remarks>
+    public static bool Verify(string plaintext, string storedHash)
+    {
+        ArgumentNullException.ThrowIfNull(plaintext);
+
+        if (string.IsNullOrEmpty(storedHash))
+        {
+            return false;
+        }
+
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(Hash(plaintext)),
+            Encoding.UTF8.GetBytes(storedHash));
+    }
 }

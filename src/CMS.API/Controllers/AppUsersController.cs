@@ -1,11 +1,16 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using CMS.API.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
 
+// 系統管理 feature: Admins only. Managing accounts and resetting passwords must not be
+// reachable by every logged-in user.
 [ApiController]
 [Route("api/app-users")]
+[Authorize(Roles = RoleNames.Admin)]
 public class AppUsersController : ControllerBase
 {
     private readonly IAppUserRepository _repository;
