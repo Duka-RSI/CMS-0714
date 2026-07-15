@@ -16,5 +16,16 @@ export interface AuthProfile {
   accessToken: string;
 }
 
+/** Body of PUT /api/Auth/profile. No userId: the API takes it from the token. */
+export interface UpdateProfileRequest {
+  userName: string;
+}
+
+/** What PUT /api/Auth/profile returns — the stored, trimmed profile. */
+export interface UserProfile {
+  userId: string;
+  userName: string;
+}
+
 /** AppRole.RoleId that unlocks the 系統管理 section. Mirrors RoleNames.Admin on the API. */
 export const ADMIN_ROLE = 'Admin';

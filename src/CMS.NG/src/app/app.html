@@ -86,12 +86,21 @@
 
       <!-- Signed-in user + logout -->
       @if (auth.isAuthenticated()) {
-        <div class="sidebar-user" [title]="auth.userName()">
-          <span class="user-avatar"><i class="pi pi-user"></i></span>
-          <span class="user-meta">
-            <span class="user-name">{{ auth.userName() }}</span>
-            <span class="user-id">{{ auth.profile()?.userId }}</span>
-          </span>
+        <div class="sidebar-user">
+          <!-- The whole block is the way to 我的帳號. The avatar stays visible in slim
+               mode, so the link survives there too. -->
+          <a
+            class="user-link"
+            routerLink="/profile"
+            routerLinkActive="active-route"
+            title="我的帳號"
+          >
+            <span class="user-avatar"><i class="pi pi-user"></i></span>
+            <span class="user-meta">
+              <span class="user-name">{{ auth.userName() }}</span>
+              <span class="user-id">{{ auth.profile()?.userId }}</span>
+            </span>
+          </a>
           <button type="button" class="logout-btn" (click)="logout()" title="登出" aria-label="登出">
             <i class="pi pi-sign-out"></i>
           </button>

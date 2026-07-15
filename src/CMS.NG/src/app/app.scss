@@ -319,6 +319,22 @@
   border-top: 1px solid #e5e7eb;
 }
 
+.sidebar-user .user-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.sidebar-user .user-link:hover,
+.sidebar-user .user-link.active-route {
+  background: #eef2ff;
+}
+
 .sidebar-user .user-avatar {
   flex: 0 0 32px;
   width: 32px;
@@ -384,4 +400,9 @@
 
 .layout-slim .sidebar-user .user-meta {
   display: none;
+}
+
+.layout-slim .sidebar-user .user-link {
+  flex: 0 0 auto;
+  justify-content: center;
 }

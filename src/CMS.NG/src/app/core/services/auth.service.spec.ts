@@ -99,6 +99,57 @@ describe('AuthService', () => {
     expect(service.roles()).toEqual(['User']);
   });
 
+  it('updateUserName() puts only the userName to /Auth/profile', () => {
+    service.login({ userId: 'u', password: 'p' }).subscribe();
+    httpMock.expectOne(loginUrl).flush(profile);
+
+    service.updateUserName('Miles Sun').subscribe();
+
+    const req = httpMock.expectOne(`${environment.apiUrl}/Auth/profile`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ userName: 'Miles Sun' });
+    req.flush({ userId: 'miles@uuu.com.tw', userName: 'Miles Sun' });
+  });
+
+  it('updateUserName() folds the stored name into the session', () => {
+    service.login({ userId: 'u', password: 'p' }).subscribe();
+    httpMock.expectOne(loginUrl).flush(profile);
+
+    service.updateUserName('  Miles Sun  ').subscribe();
+    httpMock
+      .expectOne(`${environment.apiUrl}/Auth/profile`)
+      .flush({ userId: 'miles@uuu.com.tw', userName: 'Miles Sun' });
+
+    // The server's trimmed value wins over what was typed.
+    expect(service.userName()).toBe('Miles Sun');
+    expect(JSON.parse(sessionStorage.getItem('auth-profile')!).userName).toBe('Miles Sun');
+  });
+
+  it('updateUserName() leaves the token, and therefore the roles, alone', () => {
+    service.login({ userId: 'u', password: 'p' }).subscribe();
+    httpMock.expectOne(loginUrl).flush(profile);
+
+    service.updateUserName('Miles Sun').subscribe();
+    httpMock
+      .expectOne(`${environment.apiUrl}/Auth/profile`)
+      .flush({ userId: 'miles@uuu.com.tw', userName: 'Miles Sun' });
+
+    expect(service.token).toBe(profile.accessToken);
+    expect(service.roles()).toEqual(['Admin', 'User']);
+    expect(JSON.parse(sessionStorage.getItem('auth-profile')!).userId).toBe('miles@uuu.com.tw');
+  });
+
+  it('updateUserName() does not resurrect a session after logout', () => {
+    service.updateUserName('Ghost').subscribe();
+    httpMock
+      .expectOne(`${environment.apiUrl}/Auth/profile`)
+      .flush({ userId: 'ghost', userName: 'Ghost' });
+
+    // Signed out: nothing to fold the name into, and no session invented.
+    expect(service.isAuthenticated()).toBeFalse();
+    expect(sessionStorage.getItem('auth-profile')).toBeNull();
+  });
+
   it('logout() clears session storage and the profile', () => {
     service.login({ userId: 'u', password: 'p' }).subscribe();
     httpMock.expectOne(loginUrl).flush(profile);

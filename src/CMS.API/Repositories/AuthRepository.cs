@@ -40,4 +40,17 @@ public sealed class AuthRepository : IAuthRepository
 
         return credential;
     }
+
+    public async Task<bool> UpdateUserNameAsync(string userId, string userName, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+
+        // UserName is the only column in the SET clause: IsActive, PasswordHash and the
+        // AppUserRole rows are untouchable through the self-service path.
+        var affected = await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE AppUser SET UserName = @UserName WHERE UserId = @UserId",
+            new { UserId = userId, UserName = userName }, cancellationToken: cancellationToken));
+
+        return affected > 0;
+    }
 }

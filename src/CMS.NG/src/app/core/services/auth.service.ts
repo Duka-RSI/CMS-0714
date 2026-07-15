@@ -2,7 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { environment } from '@env/environment';
-import { ADMIN_ROLE, AuthProfile, LoginRequest } from '@app/core/models/auth.model';
+import { ADMIN_ROLE, AuthProfile, LoginRequest, UserProfile } from '@app/core/models/auth.model';
 
 /** Session-storage key holding the signed-in profile. */
 const STORAGE_KEY = 'auth-profile';
@@ -92,6 +92,23 @@ export class AuthService {
     return this.http
       .post<AuthProfile>(`${this.baseUrl}/login`, request)
       .pipe(tap((profile) => this.store(profile)));
+  }
+
+  /**
+   * Renames the signed-in user, then folds the stored name into the session so the shell
+   * updates. Only the display name changes — the API takes the user from the token, and
+   * the token itself is untouched, so roles and identity cannot move.
+   */
+  updateUserName(userName: string): Observable<UserProfile> {
+    return this.http.put<UserProfile>(`${this.baseUrl}/profile`, { userName }).pipe(
+      tap((updated) => {
+        const current = this._profile();
+        if (current) {
+          // Take the server's value, not the input: it is the trimmed one.
+          this.store({ ...current, userName: updated.userName });
+        }
+      }),
+    );
   }
 
   /** Drops the session. Callers decide where to navigate. */

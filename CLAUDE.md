@@ -84,6 +84,9 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
 - **`MapInboundClaims = false` is load-bearing** — with the default, IdentityModel rewrites
   the `role` claim to a URI and every `[Authorize(Roles=...)]` silently rejects. See
   `spec/auth/Authorization.md`.
+- **`AuthController` is `[AllowAnonymous]`, and its actions inherit that.** A new action
+  there needs its own `[Authorize]` or it is public — the global fallback will not save it.
+  `PUT /profile` is the worked example.
 - **`PasswordHash` may only be read via `AuthRepository`**; `AppUserRepository` must keep
   never selecting it. See `spec/auth/Login.md`.
 - **Update endpoints sync N-N sets from the request** — never build a PUT from a list

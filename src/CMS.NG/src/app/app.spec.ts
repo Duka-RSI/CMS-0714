@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MessageService, ConfirmationService } from 'primeng/api';
+import { environment } from '@env/environment';
 import { App } from './app';
 import { AuthService } from '@app/core/services/auth.service';
 import { tokenWithRoles } from '@app/testing/jwt.fixture';
@@ -123,6 +124,31 @@ describe('App', () => {
 
     expect(compiled.querySelector('.sidebar-user .user-name')?.textContent).toContain('Miles');
     expect(compiled.querySelector('.sidebar-user .logout-btn')).toBeTruthy();
+  });
+
+  it('links the user block to 我的帳號 for every role', () => {
+    signIn(['User']);
+    const compiled = render().nativeElement as HTMLElement;
+
+    const link = compiled.querySelector('.sidebar-user .user-link');
+    expect(link?.getAttribute('href')).toBe('/profile');
+  });
+
+  it('reflects a renamed user in the shell without a reload', () => {
+    signIn(['User']);
+    const fixture = render();
+    const auth = TestBed.inject(AuthService);
+
+    // What MyProfile's save does to the session, via the same service.
+    auth.updateUserName('Miles Sun').subscribe();
+    TestBed.inject(HttpTestingController)
+      .expectOne(`${environment.apiUrl}/Auth/profile`)
+      .flush({ userId: 'miles@uuu.com.tw', userName: 'Miles Sun' });
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.sidebar-user .user-name')?.textContent,
+    ).toContain('Miles Sun');
   });
 
   it('logout() clears the session and returns to the login page', () => {

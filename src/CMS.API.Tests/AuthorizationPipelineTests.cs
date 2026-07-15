@@ -121,6 +121,51 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
         Assert.Contains("使用者代碼或密碼錯誤", await response.Content.ReadAsStringAsync());
     }
 
+    // ----- AuthController's own protected action -----
+
+    [Fact]
+    public async Task UpdateProfile_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PutAsJsonAsync("/api/Auth/profile", new { userName = "Anyone" });
+
+        // [AllowAnonymous] sits on the controller: without its own [Authorize], this action
+        // would inherit it and let anyone rename... nobody in particular. This is the test
+        // that catches that attribute going missing.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_WithAValidToken_RenamesTheTokenUserAndIgnoresTheBodyUserId()
+    {
+        _factory.AuthRepository
+            .Setup(r => r.UpdateUserNameAsync("miles@uuu.com.tw", "Renamed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token)
+            .PutAsJsonAsync("/api/Auth/profile", new { userId = "victim@uuu.com.tw", userName = "Renamed" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<UserProfileResponse>();
+        Assert.Equal("miles@uuu.com.tw", payload!.UserId);
+        // End-to-end proof that the body's userId is inert: the victim is never touched.
+        _factory.AuthRepository.Verify(
+            r => r.UpdateUserNameAsync("victim@uuu.com.tw", It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_WithABlankUserName_Returns400()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token).PutAsJsonAsync("/api/Auth/profile", new { userName = "   " });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     // ----- Everything else requires a token -----
 
     [Theory]

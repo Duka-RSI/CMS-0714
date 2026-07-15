@@ -8,6 +8,12 @@ import { authGuard } from '@app/core/guards/auth.guard';
 const protectedRoutes: Routes = [
   { path: '', redirectTo: 'courses', pathMatch: 'full' },
   {
+    // The signed-in user's own account. Every role has one, so no Admin gate.
+    path: 'profile',
+    loadComponent: () =>
+      import('@app/features/profile/my-profile/my-profile').then((m) => m.MyProfile),
+  },
+  {
     path: 'app-roles',
     loadComponent: () =>
       import('@app/features/app-roles/app-role-list/app-role-list').then((m) => m.AppRoleList),

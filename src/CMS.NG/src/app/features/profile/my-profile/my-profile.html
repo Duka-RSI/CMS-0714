@@ -1,0 +1,54 @@
+<form [formGroup]="form" (ngSubmit)="save()" class="page">
+  <div class="page-header">
+    <h1 class="title">我的帳號</h1>
+    <div class="actions">
+      <p-button
+        type="button"
+        label="還原"
+        icon="pi pi-undo"
+        severity="secondary"
+        [outlined]="true"
+        [disabled]="form.pristine || saving()"
+        (onClick)="reset()"
+      />
+      <p-button type="submit" label="儲存" icon="pi pi-check" severity="success" [loading]="saving()" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">帳號資料</h2>
+
+    <div class="field">
+      <label for="userId">使用者代碼</label>
+      <input id="userId" type="text" pInputText [value]="userId()" disabled />
+      <small class="hint">使用者代碼為主鍵，不可修改。</small>
+    </div>
+
+    <div class="field">
+      <label for="userName">使用者名稱 <span class="text-required">*</span></label>
+      <input
+        id="userName"
+        type="text"
+        pInputText
+        formControlName="userName"
+        maxlength="200"
+        placeholder="請輸入使用者名稱"
+      />
+      @if (form.controls.userName.invalid && form.controls.userName.touched) {
+        <small class="error">請輸入使用者名稱。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label>角色</label>
+      <div class="roles" data-testid="roles">
+        @for (role of roles(); track role) {
+          <p-tag [value]="role" severity="info" />
+        } @empty {
+          <span class="hint">未指派任何角色。</span>
+        }
+      </div>
+      <small class="hint">角色由系統管理員指派，無法自行變更。</small>
+    </div>
+  </div>
+</form>
