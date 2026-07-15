@@ -297,11 +297,15 @@ link buttons in this pass (children not built).
 
 ### Sidebar placement
 
-Add a **new section** `課程管理 Course` (mirrors how `系統管理 Admin` holds routed
-features) with item `合作廠商 Partner` (`icon: pi pi-building`, `route: /partners`),
-placed before the `系統管理 Admin` section in `app.ts`. (The current disabled
-`課程管理 Course` entry under `功能選單` is a module placeholder; the new routed section
-is where the feature lives.)
+Add item `合作廠商 Partner` (`icon: pi pi-building`, `route: /partners`) as a
+**level-3 child** of the `課程管理 Course` collapsible group under the `功能選單`
+section in `app.ts`.
+
+**Superseded:** this originally created a separate top-level `課程管理 Course` section,
+because the two-level sidebar of the time could not hang links off the disabled
+`課程管理 Course` placeholder under `功能選單`. The sidebar now supports three levels
+(section → item → `item.children`), so the placeholder became a collapsible group and
+the duplicate section was removed. New course features go under that group as L3 links.
 
 ### Lookup service
 

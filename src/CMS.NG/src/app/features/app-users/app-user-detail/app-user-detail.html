@@ -1,0 +1,58 @@
+<div class="page">
+  <div class="page-header">
+    <h1 class="title">檢視使用者</h1>
+    <div class="actions">
+      <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="goBack()" />
+      <p-button label="編輯" icon="pi pi-pencil" (onClick)="goEdit()" />
+    </div>
+  </div>
+
+  @if (user(); as u) {
+    <div class="card">
+      <h2 class="section-title">使用者資料</h2>
+      <dl class="detail-grid">
+        <dt>主代碼</dt>
+        <dd>{{ u.pkid }}</dd>
+
+        <dt>使用者代碼</dt>
+        <dd>{{ u.userId }}</dd>
+
+        <dt>使用者名稱</dt>
+        <dd>{{ u.userName }}</dd>
+
+        <dt>啟用</dt>
+        <dd>
+          <p-tag
+            [value]="u.isActive ? '啟用' : '停用'"
+            [severity]="u.isActive ? 'success' : 'danger'"
+          />
+        </dd>
+
+        <dt>密碼更新時間</dt>
+        <dd>
+          <!-- Dapper returns datetime with Kind=Unspecified; append 'Z' so it parses as UTC. -->
+          @if (u.passwordUpdatedTime) {
+            {{ u.passwordUpdatedTime + 'Z' | date: 'yyyy/MM/dd HH:mm' }}
+          } @else {
+            <span class="muted">— （尚未變更過密碼，仍為系統預設密碼）</span>
+          }
+        </dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">角色 <span class="count">（{{ u.roleCount }}）</span></h2>
+      @if (roleLabels().length > 0) {
+        <div class="chips">
+          @for (label of roleLabels(); track label) {
+            <p-tag [value]="label" severity="secondary" />
+          }
+        </div>
+      } @else {
+        <p class="empty">此使用者目前沒有指派任何角色。</p>
+      }
+    </div>
+  } @else if (!loading()) {
+    <div class="card empty">查無資料。</div>
+  }
+</div>

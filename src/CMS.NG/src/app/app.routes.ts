@@ -24,6 +24,35 @@ export const routes: Routes = [
       import('@app/features/app-roles/app-role-detail/app-role-detail').then((m) => m.AppRoleDetail),
   },
   {
+    path: 'app-users',
+    loadComponent: () =>
+      import('@app/features/app-users/app-user-list/app-user-list').then((m) => m.AppUserList),
+  },
+  {
+    // Must precede ':id' so "new" is not captured as a user id.
+    path: 'app-users/new',
+    loadComponent: () =>
+      import('@app/features/app-users/app-user-form/app-user-form').then((m) => m.AppUserForm),
+  },
+  {
+    path: 'app-users/:id/edit',
+    loadComponent: () =>
+      import('@app/features/app-users/app-user-form/app-user-form').then((m) => m.AppUserForm),
+  },
+  {
+    path: 'app-users/:id',
+    loadComponent: () =>
+      import('@app/features/app-users/app-user-detail/app-user-detail').then((m) => m.AppUserDetail),
+  },
+  {
+    // Custom board (tabs + week navigator + inline forms) — no detail/form routes.
+    path: 'featured-promo-items',
+    loadComponent: () =>
+      import(
+        '@app/features/featured-promo-items/featured-promo-item-board/featured-promo-item-board'
+      ).then((m) => m.FeaturedPromoItemBoard),
+  },
+  {
     path: 'partners',
     loadComponent: () =>
       import('@app/features/partners/partner-list/partner-list').then((m) => m.PartnerList),
@@ -43,6 +72,35 @@ export const routes: Routes = [
     path: 'partners/:id',
     loadComponent: () =>
       import('@app/features/partners/partner-detail/partner-detail').then((m) => m.PartnerDetail),
+  },
+  {
+    path: 'course-groups',
+    loadComponent: () =>
+      import('@app/features/course-groups/course-group-list/course-group-list').then(
+        (m) => m.CourseGroupList,
+      ),
+  },
+  {
+    // Must precede ':id' so "new" is not captured as a pkid.
+    path: 'course-groups/new',
+    loadComponent: () =>
+      import('@app/features/course-groups/course-group-form/course-group-form').then(
+        (m) => m.CourseGroupForm,
+      ),
+  },
+  {
+    path: 'course-groups/:id/edit',
+    loadComponent: () =>
+      import('@app/features/course-groups/course-group-form/course-group-form').then(
+        (m) => m.CourseGroupForm,
+      ),
+  },
+  {
+    path: 'course-groups/:id',
+    loadComponent: () =>
+      import('@app/features/course-groups/course-group-detail/course-group-detail').then(
+        (m) => m.CourseGroupDetail,
+      ),
   },
   {
     path: 'publish-statuses',

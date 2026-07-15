@@ -1,0 +1,116 @@
+<div class="page">
+  <div class="page-header">
+    <div class="title-block">
+      <h1 class="title">上稿作業 FeaturedPromoItem</h1>
+      <span class="subtitle">各訓練中心每週首頁上稿排程</span>
+    </div>
+  </div>
+
+  <!-- TrainingCenter tabs — filters TrainingCenter_pkid -->
+  <p-tabs [value]="activeCenterPkid() ?? undefined" (valueChange)="selectCenter($event)">
+    <p-tablist>
+      @for (center of centers(); track center.pkid) {
+        <p-tab [value]="center.pkid">{{ center.name }}</p-tab>
+      }
+    </p-tablist>
+  </p-tabs>
+
+  <!-- Week navigator — one Monday-to-Sunday week -->
+  <div class="week-nav">
+    <p-button
+      icon="pi pi-angle-double-left"
+      severity="secondary"
+      [text]="true"
+      pTooltip="前一週"
+      (onClick)="previousWeek()"
+    />
+    <span class="week-label">{{ weekLabel() }}</span>
+    <p-button
+      icon="pi pi-angle-double-right"
+      severity="secondary"
+      [text]="true"
+      pTooltip="後一週"
+      (onClick)="nextWeek()"
+    />
+  </div>
+
+  <div class="board" [class.board-loading]="loading()">
+    @for (day of days(); track day.isoDate) {
+      <section class="day-group">
+        <header class="day-header">{{ day.label }}</header>
+
+        @for (cell of day.cells; track cell.slot) {
+          <div class="slot-row" [class.slot-row-editing]="isEditing(day.isoDate, cell.slot)">
+            <span class="slot-number">{{ cell.slot }}</span>
+
+            @if (isEditing(day.isoDate, cell.slot)) {
+              <app-featured-promo-item-form
+                class="slot-form"
+                [item]="cell.item"
+                [seed]="seedFor(day.isoDate, cell.slot)"
+                [scheduleOn]="day.isoDate"
+                [trainingCenterPkid]="activeCenterPkid()!"
+                [slot]="cell.slot"
+                (saved)="onSaved()"
+                (cancelled)="onCancelled()"
+              />
+            } @else {
+              <!-- + moves the row down a slot, − moves it up -->
+              <button
+                type="button"
+                class="link-action"
+                [disabled]="!cell.item || !canMoveDown(cell.item)"
+                pTooltip="往下移一欄"
+                (click)="moveSlot(cell.item!, 1)"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                class="link-action"
+                [disabled]="!cell.item || !canMoveUp(cell.item)"
+                pTooltip="往上移一欄"
+                (click)="moveSlot(cell.item!, -1)"
+              >
+                --
+              </button>
+
+              <button
+                type="button"
+                class="link-action"
+                (click)="startEdit(day.isoDate, cell.slot)"
+              >
+                Edit
+              </button>
+
+              @if (cell.item) {
+                <button type="button" class="link-action" (click)="copy(cell.item)">Copy</button>
+                <button
+                  type="button"
+                  class="link-action link-danger"
+                  (click)="confirmDelete(cell.item)"
+                >
+                  Delete
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="link-action"
+                  [disabled]="!clipboard()"
+                  pTooltip="貼上已複製的上稿"
+                  (click)="startPaste(day.isoDate, cell.slot)"
+                >
+                  Paste
+                </button>
+              }
+
+              <span class="cell cell-code">{{ cell.item?.promoCode }}</span>
+              <span class="cell cell-topic">{{ cell.item?.topic }}</span>
+              <span class="cell cell-description">{{ cell.item?.description }}</span>
+            }
+          </div>
+        }
+      </section>
+    }
+  </div>
+</div>

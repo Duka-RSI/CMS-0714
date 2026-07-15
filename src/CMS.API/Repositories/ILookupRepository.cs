@@ -5,6 +5,10 @@ namespace CMS.API.Repositories;
 public interface ILookupRepository
 {
     Task<IEnumerable<AppUserLookup>> GetAppUsersAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<AppRoleLookup>> GetAppRolesAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<PublishStatusLookup>> GetPublishStatusesAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<PartnerLookup>> GetPartnersAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<CourseGroupLookup>> GetCourseGroupsAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<TrainingCenterLookup>> GetTrainingCentersAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<PromotionLookup>> GetPromotionsAsync(string? keyword, CancellationToken cancellationToken = default);
 }

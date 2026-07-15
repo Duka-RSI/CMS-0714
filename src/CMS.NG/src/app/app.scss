@@ -161,6 +161,61 @@
   color: #cbd5e1;
 }
 
+/* ---------- Level-3 (collapsible submenu) ---------- */
+.menu-node {
+  position: relative;
+}
+
+/* The group row is a <button> — reset native styling to match .menu-item. */
+.menu-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.menu-toggler {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+
+.menu-toggle.expanded .menu-toggler {
+  transform: rotate(180deg);
+}
+
+/* Animated open/close without knowing content height (grid 0fr → 1fr). */
+.submenu {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.submenu.open {
+  grid-template-rows: 1fr;
+}
+
+.submenu-inner {
+  overflow: hidden;
+  min-height: 0;
+  padding-left: 14px;
+  /* guide line for the nested level */
+  margin-left: 12px;
+  border-left: 1px solid #eef1f5;
+}
+
+/* The parent label shown as a header — only used inside the slim flyout. */
+.submenu-title {
+  display: none;
+}
+
+.submenu-item {
+  font-size: 13.5px;
+}
+
 /* Slim (collapsed) mode — icons only */
 .layout-slim .menu-item {
   justify-content: center;
@@ -174,6 +229,76 @@
 .layout-slim .menu-item-icon {
   flex-basis: auto;
   width: auto;
+}
+
+.layout-slim .menu-toggler {
+  display: none;
+}
+
+/* Let flyouts escape the narrow rail (content is short in slim mode). */
+.layout-slim .layout-sidebar {
+  overflow: visible;
+}
+
+/* Level-3 becomes a hover flyout panel to the right of the group icon. */
+.layout-slim .menu-node.has-children .submenu {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 0;
+  min-width: 210px;
+  display: block;
+  grid-template-rows: none;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.12),
+    0 0 2px rgba(0, 0, 0, 0.08);
+  padding: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-6px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    visibility 0.15s;
+  z-index: 60;
+}
+
+.layout-slim .menu-node.has-children:hover .submenu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.layout-slim .menu-node.has-children .submenu-inner {
+  padding-left: 0;
+  margin-left: 0;
+  border-left: none;
+}
+
+.layout-slim .menu-node.has-children .submenu .menu-item {
+  justify-content: flex-start;
+  padding: 8px 10px;
+}
+
+.layout-slim .menu-node.has-children .submenu .menu-item-text {
+  display: inline;
+}
+
+.layout-slim .menu-node.has-children .submenu .menu-item-icon {
+  flex: 0 0 20px;
+  width: 20px;
+}
+
+.layout-slim .submenu-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #94a3b8;
+  padding: 4px 10px 8px;
+  white-space: nowrap;
 }
 
 /* ---------- Content ---------- */

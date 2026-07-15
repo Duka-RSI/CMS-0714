@@ -18,23 +18,66 @@
       @for (section of menu(); track section.title) {
         <div class="menu-section">
           <div class="menu-section-title">{{ section.title }}</div>
+
           @for (item of section.items; track item.label) {
-            @if (item.route) {
-              <a
-                class="menu-item"
-                [routerLink]="item.route"
-                routerLinkActive="active-route"
-                [title]="item.label"
-              >
-                <i class="menu-item-icon" [class]="item.icon"></i>
-                <span class="menu-item-text">{{ item.label }}</span>
-              </a>
-            } @else {
-              <span class="menu-item disabled" [title]="item.label">
-                <i class="menu-item-icon" [class]="item.icon"></i>
-                <span class="menu-item-text">{{ item.label }}</span>
-              </span>
-            }
+            <div class="menu-node" [class.has-children]="item.children?.length">
+              @if (item.children?.length) {
+                <!-- Level-2 collapsible group -->
+                <button
+                  type="button"
+                  class="menu-item menu-toggle"
+                  [class.expanded]="item.expanded"
+                  (click)="toggleItem(item)"
+                  [title]="item.label"
+                >
+                  <i class="menu-item-icon" [class]="item.icon"></i>
+                  <span class="menu-item-text">{{ item.label }}</span>
+                  <i class="menu-toggler pi pi-angle-down"></i>
+                </button>
+
+                <!-- Level-3 submenu (animated open/close; flyout in slim mode) -->
+                <div class="submenu" [class.open]="item.expanded">
+                  <div class="submenu-inner">
+                    <div class="submenu-title">{{ item.label }}</div>
+                    @for (child of item.children; track child.label) {
+                      @if (child.route) {
+                        <a
+                          class="menu-item submenu-item"
+                          [routerLink]="child.route"
+                          routerLinkActive="active-route"
+                          [title]="child.label"
+                        >
+                          <i class="menu-item-icon" [class]="child.icon"></i>
+                          <span class="menu-item-text">{{ child.label }}</span>
+                        </a>
+                      } @else {
+                        <span class="menu-item submenu-item disabled" [title]="child.label">
+                          <i class="menu-item-icon" [class]="child.icon"></i>
+                          <span class="menu-item-text">{{ child.label }}</span>
+                        </span>
+                      }
+                    }
+                  </div>
+                </div>
+              } @else if (item.route) {
+                <!-- Level-2 leaf link -->
+                <a
+                  class="menu-item"
+                  [routerLink]="item.route"
+                  routerLinkActive="active-route"
+                  [title]="item.label"
+                >
+                  <i class="menu-item-icon" [class]="item.icon"></i>
+                  <span class="menu-item-text">{{ item.label }}</span>
+                </a>
+              } @else {
+                <!-- Level-2 placeholder -->
+                <span class="menu-item disabled" [title]="item.label">
+                  <i class="menu-item-icon" [class]="item.icon"></i>
+                  <span class="menu-item-text">{{ item.label }}</span>
+                </span>
+              }
+            </div>
           }
         </div>
       }

@@ -21,6 +21,14 @@ public sealed class LookupRepository : ILookupRepository
             cancellationToken: cancellationToken));
     }
 
+    public async Task<IEnumerable<AppRoleLookup>> GetAppRolesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        return await connection.QueryAsync<AppRoleLookup>(new CommandDefinition(
+            "SELECT RoleId, RoleName FROM AppRole ORDER BY RoleId ASC",
+            cancellationToken: cancellationToken));
+    }
+
     public async Task<IEnumerable<PublishStatusLookup>> GetPublishStatusesAsync(CancellationToken cancellationToken = default)
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
@@ -36,4 +44,41 @@ public sealed class LookupRepository : ILookupRepository
             "SELECT pkid, Name FROM Partner ORDER BY DisplayOrder ASC, Name ASC",
             cancellationToken: cancellationToken));
     }
+
+    public async Task<IEnumerable<CourseGroupLookup>> GetCourseGroupsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        return await connection.QueryAsync<CourseGroupLookup>(new CommandDefinition(
+            "SELECT pkid, Description FROM CourseGroup ORDER BY Description ASC",
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<IEnumerable<TrainingCenterLookup>> GetTrainingCentersAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+        return await connection.QueryAsync<TrainingCenterLookup>(new CommandDefinition(
+            "SELECT pkid, Name FROM TrainingCenter ORDER BY DisplayOrder ASC, pkid ASC",
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<IEnumerable<PromotionLookup>> GetPromotionsAsync(string? keyword, CancellationToken cancellationToken = default)
+    {
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+
+        // Capped: this backs an as-you-type PromoCode autocomplete, not a full list.
+        return await connection.QueryAsync<PromotionLookup>(new CommandDefinition(
+            @"SELECT TOP (@Take) pkid, PromoCode, Topic, Description
+              FROM Promotion2
+              WHERE (@Keyword IS NULL OR PromoCode LIKE @Keyword)
+              ORDER BY PromoCode ASC",
+            new
+            {
+                Keyword = string.IsNullOrWhiteSpace(keyword) ? null : $"%{keyword.Trim()}%",
+                Take = PromotionLookupLimit
+            },
+            cancellationToken: cancellationToken));
+    }
+
+    /// <summary>Max rows returned by the PromoCode autocomplete.</summary>
+    private const int PromotionLookupLimit = 20;
 }

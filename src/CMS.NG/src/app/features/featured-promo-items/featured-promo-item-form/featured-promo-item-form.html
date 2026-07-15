@@ -1,0 +1,73 @@
+<form class="promo-form" [formGroup]="form" (ngSubmit)="save()">
+  <div class="field">
+    <label for="promoCode">PromoCode:</label>
+    <p-autoComplete
+      inputId="promoCode"
+      formControlName="promoCode"
+      [suggestions]="suggestions()"
+      [optionLabel]="'promoCode'"
+      [forceSelection]="false"
+      [minLength]="1"
+      [delay]="250"
+      appendTo="body"
+      placeholder="輸入 PromoCode 查詢"
+      (completeMethod)="searchPromotions($event)"
+      (onSelect)="onPromotionSelected($event.value)"
+      (onClear)="onPromoCodeInput()"
+      (input)="onPromoCodeInput()"
+    >
+      <ng-template let-promotion #item>
+        <div class="promo-option">
+          <span class="promo-option-code">{{ promotion.promoCode }}</span>
+          <span class="promo-option-topic">{{ promotion.topic }}</span>
+        </div>
+      </ng-template>
+    </p-autoComplete>
+    @if (form.controls.promoCode.touched && form.controls.promoCode.hasError('required')) {
+      <p-message severity="error" text="請輸入 PromoCode。" />
+    }
+    @if (form.controls.promoCode.touched && form.controls.promoCode.hasError('unresolvedPromoCode')) {
+      <p-message severity="error" text="請從清單中選擇有效的 PromoCode。" />
+    }
+  </div>
+
+  <div class="field">
+    <label for="topic">Topic:</label>
+    <input id="topic" type="text" pInputText formControlName="topic" maxlength="100" />
+    @if (form.controls.topic.touched && form.controls.topic.hasError('required')) {
+      <p-message severity="error" text="請輸入 Topic。" />
+    }
+  </div>
+
+  <div class="field">
+    <label for="description">Description:</label>
+    <input
+      id="description"
+      type="text"
+      pInputText
+      formControlName="description"
+      maxlength="300"
+    />
+    @if (form.controls.description.touched && form.controls.description.hasError('required')) {
+      <p-message severity="error" text="請輸入 Description。" />
+    }
+  </div>
+
+  <div class="form-actions">
+    <p-button
+      label="Save"
+      [text]="true"
+      type="submit"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+    <p-button
+      label="Cancel"
+      severity="secondary"
+      [text]="true"
+      type="button"
+      [disabled]="saving()"
+      (onClick)="cancel()"
+    />
+  </div>
+</form>
