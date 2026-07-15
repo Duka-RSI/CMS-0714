@@ -108,10 +108,26 @@ business row is committed.
 | `ActionType` | `"Insert"` / `"Update"` / `"Delete"` |
 | `ActionDesc` | Insert & Delete: the **first string property in declaration order**. Update: the **changed property names**, `", "`-separated |
 | `DateTime` | `TimeProvider.GetUtcNow()` — **UTC**, matching how `GETUTCDATE()` stamps `PasswordUpdatedTime` |
+| `BeforeValues` | Update: JSON of the **changed properties' old values** (exactly the names in ActionDesc). Delete: JSON of the **whole audited row** — after the DELETE this is the only surviving copy. Insert: NULL |
+| `AfterValues` | Update: JSON of the changed properties' **new** values. Insert & Delete: NULL |
 
 Declaration order is pinned by ordering on `PropertyInfo.MetadataToken` — `GetProperties()`
 guarantees no order of its own, and "the FIRST string property" depends on one. The
 per-type reflection is cached in a static `ConcurrentDictionary`.
+
+### The value columns (`BeforeValues` / `AfterValues`)
+
+Both are **`nvarchar(max)`** (added 2026-07-15 by `ALTER TABLE`; `database/admin.sql` is in
+step): the values are Chinese-bearing JSON, so `varchar` would repeat ActionDesc's Big5
+lossiness and any fixed length would gamble against Course's several `nvarchar(4000)`
+columns. `[NotAudited]` properties never appear — the payloads are built from the same
+`AuditableProperties` set as everything else. Serialization uses
+`JavaScriptEncoder.UnsafeRelaxedJsonEscaping` so CJK is stored readable rather than
+backslash-u escaped (the value lands in a column, never in HTML — the strict default would
+triple the size and defeat eyeballing). A serialization failure degrades that payload to
+NULL with a logged warning; it never loses the row and never fails the caller. Update stores
+**only the changed properties** on both sides; storing whole-row snapshots per edit was
+considered and declined for bloat.
 
 ## The read side
 
@@ -254,7 +270,10 @@ Parameters are typed `DbType.AnsiString` for the `varchar` columns so SqlClient 
 
 ## Tests
 
-`RowAuditWriterTests` (35) mocks `IRowAuditRepository`, so no database is touched. Covers:
+`RowAuditWriterTests` (42) mocks `IRowAuditRepository`, so no database is touched. Covers:
+the value columns — Update stores exactly the changed properties' old/new values (untouched
+ones absent), CJK unescaped, collections as arrays, null→value transitions; Insert stores no
+payloads; Delete snapshots the whole row minus `[NotAudited]` — plus the original set:
 Insert/Delete take the first string property (not the first property, not any string
 property, null when it is null or absent); Update lists exactly the changed names in
 declaration order, and writes **nothing** when nothing changed; collections compare
@@ -330,6 +349,13 @@ no token → 401. In the browser, the detail page rendered the badge inline
 local 16:37, so the `+ 'Z'` trick works), and clicking it opened the dialog listing all three
 rows newest-first with the Chinese label intact.
 
+**The value columns**, driven end-to-end (miles as Admin; test rows deleted after): a
+CourseGroup create → rename → delete produced Insert with both columns NULL; Update with
+`BeforeValues = {"Description":"值稽核測試"}` and `AfterValues = {"Description":"值稽核測試-改名後"}`
+— byte-exact, Chinese unescaped, only the changed column; Delete with a whole-row JSON
+snapshot in `BeforeValues` (`ISJSON` = 1, both properties readable via `JSON_VALUE`) and
+`AfterValues` NULL.
+
 **Compact mode**, driven in the browser: the Course list rendered 20 rows and 20 history
 buttons with **zero** `row-audits` requests on load; clicking one fired exactly one GET and
 opened the dialog — which showed two real inline-edit audit rows (`Update/ScheduleOff`,
@@ -355,6 +381,9 @@ and the friendly empty state for a record that predates the audit system.
   audit rows are keyed by, so the self-service page cannot address its own history without a
   new lookup endpoint. Deferred rather than widened.
 - **Still no write-back UI.** RowAudit is read-only to the app; nothing edits or purges it.
+- **`BeforeValues`/`AfterValues` are stored but not served.** `GET /api/row-audits` and the
+  badge dialog deliberately omit them (declined for now); they are queryable via SQL
+  (`JSON_VALUE`). Surfacing them in the dialog is the natural next step if asked.
 - **Rows written before the audit system existed show "尚無異動紀錄".** RowAudit only has what
   the repositories wrote since it went live — pre-existing records legitimately have empty
   trails until their next change.

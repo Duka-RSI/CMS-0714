@@ -93,8 +93,10 @@ Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`
 - **Every repository write is audited** via `IRowAuditWriter` — a new feature must call it
   too, and must mark its JOINed labels / subquery counts `[NotAudited]` or they get logged
   as if they were edits (fails *silently*). `ActionDesc` is `varchar(1000)` under a Chinese
-  collation: **1000 bytes = 500 中文 characters**. History is read via `GET /api/row-audits`
-  and shown by `<app-row-audit-badge tableName pkid>` on every detail/form page — the badge
-  keys on the **surrogate `pkid`**, not the string PK. See `spec/admin/RowAudit.md`.
+  collation: **1000 bytes = 500 中文 characters**. `BeforeValues`/`AfterValues` (nvarchar(max)
+  JSON) hold an Update's changed values and a Delete's whole-row snapshot — stored only, not
+  served by the API. History is read via `GET /api/row-audits` and shown by
+  `<app-row-audit-badge tableName pkid>` on every detail/form page (`[compact]` on lists) —
+  the badge keys on the **surrogate `pkid`**, not the string PK. See `spec/admin/RowAudit.md`.
 - **`.claude/` is untracked local tooling** — keep it out of commits; never `git add -A`
   blindly.

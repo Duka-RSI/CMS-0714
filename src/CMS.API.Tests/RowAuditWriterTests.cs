@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using CMS.API.Auditing;
 using CMS.API.Models;
 using CMS.API.Repositories;
@@ -246,6 +247,127 @@ public class RowAuditWriterTests
         await writer.LogInsertAsync("Skipped", new NotAuditedFirstString { Pkid = 1, Label = "joined", Title = "real" });
 
         Assert.Equal("real", _written!.ActionDesc);
+    }
+
+    // ----- BeforeValues / AfterValues -----
+
+    [Fact]
+    public async Task LogUpdate_StoresTheChangedValuesBeforeAndAfter()
+    {
+        var writer = CreateWriter();
+        var before = new Widget { Pkid = 7, DisplayOrder = 1, Name = "舊名稱", Description = "same" };
+        var after = new Widget { Pkid = 7, DisplayOrder = 2, Name = "新名稱", Description = "same" };
+
+        await writer.LogUpdateAsync("Widget", before, after);
+
+        Assert.NotNull(_written);
+        using var beforeJson = JsonDocument.Parse(_written!.BeforeValues!);
+        using var afterJson = JsonDocument.Parse(_written.AfterValues!);
+
+        // Exactly the changed properties — the untouched Description and Pkid are absent.
+        Assert.Equal(2, beforeJson.RootElement.EnumerateObject().Count());
+        Assert.Equal(1, beforeJson.RootElement.GetProperty("DisplayOrder").GetInt32());
+        Assert.Equal("舊名稱", beforeJson.RootElement.GetProperty("Name").GetString());
+        Assert.False(beforeJson.RootElement.TryGetProperty("Description", out _));
+
+        Assert.Equal(2, afterJson.RootElement.EnumerateObject().Count());
+        Assert.Equal(2, afterJson.RootElement.GetProperty("DisplayOrder").GetInt32());
+        Assert.Equal("新名稱", afterJson.RootElement.GetProperty("Name").GetString());
+    }
+
+    [Fact]
+    public async Task LogUpdate_StoresChineseValuesUnescaped()
+    {
+        var writer = CreateWriter();
+        var before = new Widget { Pkid = 7, Name = "舊" };
+        var after = new Widget { Pkid = 7, Name = "課程群組" };
+
+        await writer.LogUpdateAsync("Widget", before, after);
+
+        // Raw CJK in the stored JSON, not backslash-u escapes — the column is nvarchar(max).
+        Assert.Contains("課程群組", _written!.AfterValues);
+        Assert.DoesNotContain("\\u", _written.AfterValues);
+    }
+
+    [Fact]
+    public async Task LogUpdate_StoresAChangedCollectionAsAJsonArray()
+    {
+        var writer = CreateWriter();
+        var before = new Widget { Pkid = 7, Name = "x", Tags = ["a"] };
+        var after = new Widget { Pkid = 7, Name = "x", Tags = ["a", "b"] };
+
+        await writer.LogUpdateAsync("Widget", before, after);
+
+        using var afterJson = JsonDocument.Parse(_written!.AfterValues!);
+        var tags = afterJson.RootElement.GetProperty("Tags").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal(new[] { "a", "b" }, tags);
+    }
+
+    [Fact]
+    public async Task LogUpdate_StoresANullBecomingAValue()
+    {
+        var writer = CreateWriter();
+        var before = new Widget { Pkid = 7, Name = "x", Description = null };
+        var after = new Widget { Pkid = 7, Name = "x", Description = "now set" };
+
+        await writer.LogUpdateAsync("Widget", before, after);
+
+        using var beforeJson = JsonDocument.Parse(_written!.BeforeValues!);
+        Assert.Equal(JsonValueKind.Null, beforeJson.RootElement.GetProperty("Description").ValueKind);
+        using var afterJson = JsonDocument.Parse(_written.AfterValues!);
+        Assert.Equal("now set", afterJson.RootElement.GetProperty("Description").GetString());
+    }
+
+    [Fact]
+    public async Task LogInsert_StoresNoValuePayloads()
+    {
+        var writer = CreateWriter();
+
+        // The inserted row is the table's current state — duplicating it here buys nothing.
+        await writer.LogInsertAsync("Widget", new Widget { Pkid = 7, Name = "x" });
+
+        Assert.Null(_written!.BeforeValues);
+        Assert.Null(_written.AfterValues);
+    }
+
+    [Fact]
+    public async Task LogDelete_StoresTheWholeRowAsBeforeValues()
+    {
+        var writer = CreateWriter();
+        var deleted = new Widget
+        {
+            Pkid = 7, DisplayOrder = 3, Name = "被刪的列", Description = "detail", IsActive = true, Tags = ["a", "b"],
+        };
+
+        await writer.LogDeleteAsync("Widget", deleted);
+
+        // After the DELETE this snapshot is the only surviving copy of the values.
+        Assert.Null(_written!.AfterValues);
+        using var beforeJson = JsonDocument.Parse(_written.BeforeValues!);
+        Assert.Equal(7, beforeJson.RootElement.GetProperty("Pkid").GetInt32());
+        Assert.Equal(3, beforeJson.RootElement.GetProperty("DisplayOrder").GetInt32());
+        Assert.Equal("被刪的列", beforeJson.RootElement.GetProperty("Name").GetString());
+        Assert.Equal("detail", beforeJson.RootElement.GetProperty("Description").GetString());
+        Assert.True(beforeJson.RootElement.GetProperty("IsActive").GetBoolean());
+        Assert.Equal(2, beforeJson.RootElement.GetProperty("Tags").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task LogDelete_ExcludesNotAuditedPropertiesFromTheSnapshot()
+    {
+        var writer = CreateWriter();
+
+        await writer.LogDeleteAsync("Derived", new Derived
+        {
+            Pkid = 1, Title = "x", PartnerPkid = 2, PartnerName = "joined label", UserCount = 9,
+        });
+
+        using var beforeJson = JsonDocument.Parse(_written!.BeforeValues!);
+        // Real columns present; the JOINed label and the subquery count are not this row's data.
+        Assert.True(beforeJson.RootElement.TryGetProperty("Title", out _));
+        Assert.True(beforeJson.RootElement.TryGetProperty("PartnerPkid", out _));
+        Assert.False(beforeJson.RootElement.TryGetProperty("PartnerName", out _));
+        Assert.False(beforeJson.RootElement.TryGetProperty("UserCount", out _));
     }
 
     // ----- PrimaryKeyValues -----

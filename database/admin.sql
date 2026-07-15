@@ -82,7 +82,9 @@ CREATE TABLE [dbo].[RowAudit](
 	[ActionType] [varchar](20) NOT NULL,
 	[ActionDesc] [varchar](1000) NULL,
 	[DateTime] [datetime] NOT NULL,
- CONSTRAINT [PK_RowAudit] PRIMARY KEY CLUSTERED 
+	[BeforeValues] [nvarchar](max) NULL,
+	[AfterValues] [nvarchar](max) NULL,
+ CONSTRAINT [PK_RowAudit] PRIMARY KEY CLUSTERED
 (
 	[pkid] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]

@@ -28,11 +28,14 @@ public sealed class RowAuditRepository : IRowAuditRepository
         parameters.Add("ActionType", entry.ActionType, DbType.AnsiString, size: 20);
         parameters.Add("ActionDesc", entry.ActionDesc, DbType.AnsiString, size: 1000);
         parameters.Add("DateTime", entry.DateTime, DbType.DateTime);
+        // size -1 = nvarchar(max).
+        parameters.Add("BeforeValues", entry.BeforeValues, DbType.String, size: -1);
+        parameters.Add("AfterValues", entry.AfterValues, DbType.String, size: -1);
 
         // pkid is IDENTITY — never written.
         await connection.ExecuteAsync(new CommandDefinition(
-            @"INSERT INTO RowAudit (TableName, UserName, PrimaryKeyValues, ActionType, ActionDesc, [DateTime])
-              VALUES (@TableName, @UserName, @PrimaryKeyValues, @ActionType, @ActionDesc, @DateTime)",
+            @"INSERT INTO RowAudit (TableName, UserName, PrimaryKeyValues, ActionType, ActionDesc, [DateTime], BeforeValues, AfterValues)
+              VALUES (@TableName, @UserName, @PrimaryKeyValues, @ActionType, @ActionDesc, @DateTime, @BeforeValues, @AfterValues)",
             parameters, cancellationToken: cancellationToken));
     }
 

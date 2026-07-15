@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using CMS.API.Models;
 using CMS.API.Repositories;
 using CMS.API.Security;
@@ -45,6 +47,17 @@ public sealed class RowAuditWriter : IRowAuditWriter
     /// <summary>Reflection is per-type and immutable, so it is resolved once and cached.</summary>
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> PropertyCache = new();
 
+    /// <summary>
+    /// Options for the BeforeValues/AfterValues JSON. The relaxed encoder keeps Chinese
+    /// readable in the column — the strict default escapes every CJK character to its
+    /// backslash-u form, tripling the size. The value lands in an nvarchar(max) column,
+    /// never in HTML, so that escaping buys nothing here.
+    /// </summary>
+    private static readonly JsonSerializerOptions ValueJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     private readonly IRowAuditRepository _repository;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly TimeProvider _timeProvider;
@@ -64,11 +77,16 @@ public sealed class RowAuditWriter : IRowAuditWriter
 
     public Task LogInsertAsync<T>(string tableName, T entity, CancellationToken cancellationToken = default)
         where T : class
-        => WriteAsync(tableName, InsertAction, PrimaryKeyOf(entity), FirstStringValueOf(entity), cancellationToken);
+        // No value payloads: the inserted row is the current state of the table itself.
+        => WriteAsync(tableName, InsertAction, PrimaryKeyOf(entity), FirstStringValueOf(entity),
+            beforeValues: null, afterValues: null, cancellationToken);
 
     public Task LogDeleteAsync<T>(string tableName, T entity, CancellationToken cancellationToken = default)
         where T : class
-        => WriteAsync(tableName, DeleteAction, PrimaryKeyOf(entity), FirstStringValueOf(entity), cancellationToken);
+        // BeforeValues keeps the whole audited row as it stood — after the DELETE this is the
+        // only place its values still exist, which is what makes an accidental delete traceable.
+        => WriteAsync(tableName, DeleteAction, PrimaryKeyOf(entity), FirstStringValueOf(entity),
+            beforeValues: SerializeValues(SnapshotOf(entity)), afterValues: null, cancellationToken);
 
     public Task LogUpdateAsync<T>(string tableName, T before, T after, CancellationToken cancellationToken = default)
         where T : class
@@ -83,11 +101,16 @@ public sealed class RowAuditWriter : IRowAuditWriter
             return Task.CompletedTask;
         }
 
+        // Only the changed properties' values, mirroring the names in ActionDesc — a Course
+        // carries several nvarchar(4000) columns, and storing untouched ones on every edit
+        // would bloat the table for nothing.
         return WriteAsync(
             tableName,
             UpdateAction,
             PrimaryKeyOf(after),
             string.Join(ChangedPropertySeparator, changed),
+            beforeValues: SerializeValues(ValuesOf(before, changed)),
+            afterValues: SerializeValues(ValuesOf(after, changed)),
             cancellationToken);
     }
 
@@ -96,6 +119,8 @@ public sealed class RowAuditWriter : IRowAuditWriter
         string actionType,
         string primaryKeyValues,
         string? actionDesc,
+        string? beforeValues,
+        string? afterValues,
         CancellationToken cancellationToken)
     {
         try
@@ -108,6 +133,9 @@ public sealed class RowAuditWriter : IRowAuditWriter
                 ActionType = actionType,
                 ActionDesc = actionDesc is null ? null : TruncateToAnsiBytes(actionDesc, ActionDescMaxBytes),
                 DateTime = _timeProvider.GetUtcNow().UtcDateTime,
+                // nvarchar(max) — no truncation needed.
+                BeforeValues = beforeValues,
+                AfterValues = afterValues,
             };
 
             await _repository.InsertAsync(entry, cancellationToken);
@@ -170,6 +198,36 @@ public sealed class RowAuditWriter : IRowAuditWriter
         }
 
         return changed;
+    }
+
+    /// <summary>The named properties' values, in declaration order (Dictionary preserves insertion order).</summary>
+    private static Dictionary<string, object?> ValuesOf<T>(T entity, List<string> propertyNames) where T : class
+    {
+        var wanted = new HashSet<string>(propertyNames, StringComparer.Ordinal);
+        return AuditableProperties(typeof(T))
+            .Where(p => wanted.Contains(p.Name))
+            .ToDictionary(p => p.Name, p => p.GetValue(entity));
+    }
+
+    /// <summary>Every auditable property's value — the whole row as the writer sees it.</summary>
+    private static Dictionary<string, object?> SnapshotOf<T>(T entity) where T : class
+        => AuditableProperties(typeof(T)).ToDictionary(p => p.Name, p => p.GetValue(entity));
+
+    /// <summary>
+    /// The values as JSON, or null if serialization fails — a value payload we could not
+    /// build must degrade the row, not lose it (and never fail the caller).
+    /// </summary>
+    private string? SerializeValues(Dictionary<string, object?> values)
+    {
+        try
+        {
+            return JsonSerializer.Serialize(values, ValueJsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to serialize RowAudit values; storing NULL instead.");
+            return null;
+        }
     }
 
     /// <summary>

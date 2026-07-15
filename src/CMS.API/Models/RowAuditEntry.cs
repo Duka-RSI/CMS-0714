@@ -35,4 +35,16 @@ public sealed class RowAuditEntry
 
     /// <summary>When the change happened (UTC). Column is datetime.</summary>
     public DateTime DateTime { get; init; }
+
+    /// <summary>
+    /// Update: JSON of the changed properties' old values. Delete: JSON of the whole audited
+    /// row as it stood. Insert: null. Column is nvarchar(max) and nullable.
+    /// </summary>
+    public string? BeforeValues { get; init; }
+
+    /// <summary>
+    /// Update: JSON of the changed properties' new values. Insert/Delete: null.
+    /// Column is nvarchar(max) and nullable.
+    /// </summary>
+    public string? AfterValues { get; init; }
 }
