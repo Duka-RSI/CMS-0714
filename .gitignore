@@ -29,6 +29,12 @@ appsettings.*.local.json
 .env
 .env.*
 
+# ---------- Local tooling ----------
+# Claude Code's per-machine state: settings, skills, and worktrees holding build
+# output. Never belongs in a commit — it stayed untracked by hand until now, and a
+# stray `git add -A` had already come close to sweeping it in.
+.claude/
+
 # ---------- OS / editor ----------
 Thumbs.db
 ehthumbs.db
