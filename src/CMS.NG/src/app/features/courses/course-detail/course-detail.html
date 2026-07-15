@@ -113,6 +113,11 @@
 
         <dt>適合對象</dt>
         <dd>{{ c.target || '—' }}</dd>
+
+        <dt>QR Code</dt>
+        <dd>
+          <app-course-qr-code [pkid]="c.pkid" [courseId]="c.courseId" />
+        </dd>
       </dl>
     </div>
 

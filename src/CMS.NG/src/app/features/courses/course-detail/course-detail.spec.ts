@@ -133,6 +133,17 @@ describe('CourseDetail', () => {
     expect(navSpy).toHaveBeenCalledWith(['/publish-statuses', 1]);
   });
 
+  it('mounts the QR code inside the 課程資料 card, wired to this record', () => {
+    const { fixture } = setup(makeCourse({ pkid: 42, courseId: 'AZ-104' }));
+
+    const card = (fixture.nativeElement as HTMLElement).querySelector('.card')!;
+    expect(card.textContent).toContain('課程資料');
+
+    const qr = card.querySelector('app-course-qr-code');
+    expect(qr).withContext('QR must live in the first (課程資料) card').toBeTruthy();
+    expect(card.textContent).toContain('QR Code');
+  });
+
   it('goEdit navigates to the edit route', () => {
     const { component } = setup(makeCourse());
     const router = TestBed.inject(Router);
