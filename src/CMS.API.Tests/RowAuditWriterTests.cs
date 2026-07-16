@@ -370,6 +370,39 @@ public class RowAuditWriterTests
         Assert.False(beforeJson.RootElement.TryGetProperty("UserCount", out _));
     }
 
+    [Fact]
+    public async Task LogDelete_WithAnUnserializableRow_StillWritesTheRow_WithNullValues()
+    {
+        var writer = CreateWriter();
+
+        await writer.LogDeleteAsync("Cyclic", new Cyclic { Pkid = 7, Label = "loops", Payload = Loop.Create() });
+
+        // A payload we cannot build degrades to NULL — it must not cost us the audit row,
+        // and LogDeleteAsync must not throw at its caller.
+        Assert.NotNull(_written);
+        Assert.Equal("Delete", _written!.ActionType);
+        Assert.Equal("loops", _written.ActionDesc);
+        Assert.Null(_written.BeforeValues);
+        Assert.Null(_written.AfterValues);
+    }
+
+    [Fact]
+    public async Task LogUpdate_WithAnUnserializableChangedValue_StillWritesTheRow_WithNullValues()
+    {
+        var writer = CreateWriter();
+        // Only Payload differs, and it is the value that cannot be serialized.
+        var before = new Cyclic { Pkid = 7, Label = "same", Payload = Loop.Create() };
+        var after = new Cyclic { Pkid = 7, Label = "same", Payload = Loop.Create() };
+
+        await writer.LogUpdateAsync("Cyclic", before, after);
+
+        // ActionDesc still names what changed even though the values could not be captured.
+        Assert.NotNull(_written);
+        Assert.Equal("Payload", _written!.ActionDesc);
+        Assert.Null(_written.BeforeValues);
+        Assert.Null(_written.AfterValues);
+    }
+
     // ----- PrimaryKeyValues -----
 
     [Fact]
@@ -631,6 +664,28 @@ public class RowAuditWriterTests
     private sealed class Keyless
     {
         public string Label { get; set; } = string.Empty;
+    }
+
+    /// <summary>A row the value serializer cannot handle, because Payload is a cycle.</summary>
+    private sealed class Cyclic
+    {
+        public int Pkid { get; set; }
+        public string Label { get; set; } = string.Empty;
+        public Loop? Payload { get; set; }
+    }
+
+    /// <summary>An object graph that points back at itself — JsonSerializer throws on it.</summary>
+    private sealed class Loop
+    {
+        public Loop? Self { get; set; }
+
+        /// <summary>A fresh instance referencing itself. Each call returns a distinct object.</summary>
+        public static Loop Create()
+        {
+            var loop = new Loop();
+            loop.Self = loop;
+            return loop;
+        }
     }
 
     /// <summary>Enough long-named string properties to overflow ActionDesc's 1000 bytes.</summary>

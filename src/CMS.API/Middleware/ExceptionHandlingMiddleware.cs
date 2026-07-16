@@ -13,7 +13,11 @@ namespace CMS.API.Middleware;
 /// </remarks>
 public class ExceptionHandlingMiddleware
 {
-    /// <summary>The only error detail a caller ever sees for an unexpected failure.</summary>
+    /// <summary>
+    /// The only error detail a caller ever sees for an unexpected failure. Kept in sync with
+    /// SERVER_ERROR_FALLBACK_MESSAGE in the NG auth-error.interceptor.ts, which shows the
+    /// same text when a 5xx arrives with no readable body.
+    /// </summary>
     public const string GenericMessage = "系統發生未預期的錯誤,請稍後再試。";
 
     private readonly RequestDelegate _next;

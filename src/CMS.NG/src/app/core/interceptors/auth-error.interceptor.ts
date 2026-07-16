@@ -8,7 +8,10 @@ import { AuthService } from '@app/core/services/auth.service';
 
 const LOGIN_URL = `${environment.apiUrl}/Auth/login`;
 
-/** Shown when a 5xx response carries no usable body (e.g. the API is down entirely). */
+/**
+ * Shown when a 5xx response carries no usable body (proxy errors, HTML error pages).
+ * Kept in sync with ExceptionHandlingMiddleware.GenericMessage on the API side.
+ */
 export const SERVER_ERROR_FALLBACK_MESSAGE = '系統發生未預期的錯誤,請稍後再試。';
 
 /**

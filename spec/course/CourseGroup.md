@@ -208,7 +208,9 @@ behavior, warned about in the delete confirmation dialog.
 
 ### Special Column Notes
 
-- No RowAudit in this codebase — mirror AppRole exactly (no audit writer).
+- RowAudit applies (added after this spec was first written): the repository calls
+  `IRowAuditWriter` on every write, and the detail/form pages host the row-audit
+  badge — see `spec/admin/RowAudit.md`.
 - No DateOnly/TimeOnly columns; type handlers already registered but unused here.
 
 ---

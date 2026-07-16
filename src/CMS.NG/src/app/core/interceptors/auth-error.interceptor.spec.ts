@@ -89,17 +89,18 @@ describe('authErrorInterceptor', () => {
   it("toasts the server's safe message on a 500 without touching the session", () => {
     http.get(`${environment.apiUrl}/courses`).subscribe({ error: () => {} });
 
+    // Deliberately NOT the fallback text, so this proves the body's message is used.
     httpMock
       .expectOne(`${environment.apiUrl}/courses`)
       .flush(
-        { message: '系統發生未預期的錯誤,請稍後再試。' },
+        { message: '資料庫暫時無法使用。' },
         { status: 500, statusText: 'Server Error' },
       );
 
     expect(messageService.add).toHaveBeenCalledWith(
       jasmine.objectContaining({
         severity: 'error',
-        detail: '系統發生未預期的錯誤,請稍後再試。',
+        detail: '資料庫暫時無法使用。',
       }),
     );
     // A server fault is not a session expiry.
@@ -110,7 +111,7 @@ describe('authErrorInterceptor', () => {
   it('falls back to the generic toast when the 5xx body carries no message', () => {
     http.get(`${environment.apiUrl}/courses`).subscribe({ error: () => {} });
 
-    // A dead API often answers with an empty or non-JSON body — no { message } to show.
+    // A proxy or gateway answers with an empty or non-JSON body — no { message } to show.
     httpMock
       .expectOne(`${environment.apiUrl}/courses`)
       .flush(null, { status: 503, statusText: 'Service Unavailable' });
@@ -132,6 +133,18 @@ describe('authErrorInterceptor', () => {
     });
 
     httpMock.expectOne(`${environment.apiUrl}/courses`).flush(null, { status: 500, statusText: 'Server Error' });
+  });
+
+  it('does not toast when the API is unreachable, since that is not a 5xx', () => {
+    http.get(`${environment.apiUrl}/courses`).subscribe({ error: () => {} });
+
+    // A connection failure has no HTTP status at all — Angular reports 0, which is
+    // deliberately outside the >= 500 branch. Pinning it so a change here is a decision,
+    // not an accident: today the caller owns this case.
+    httpMock.expectOne(`${environment.apiUrl}/courses`).error(new ProgressEvent('error'));
+
+    expect(messageService.add).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
   // ----- 4xx business failures stay with the caller -----

@@ -241,9 +241,10 @@ SELECT COUNT(1) FROM PublishStatus WHERE pkid = @Pkid;   -- ExistsAsync (create 
   (mirrors AppRole's `ExistsAsync` guard on its string PK).
 - No `nchar`, `date`, `time`, FK, or N-N columns → no RTRIM, no type handlers, no
   junction sync.
-- **RowAudit is NOT used** — the AppRole reference feature has no RowAudit
-  infrastructure in this codebase, so this feature mirrors that (no audit writer,
-  no audit badge).
+- **RowAudit is used** (added after this spec was first written): the repository
+  calls `IRowAuditWriter` on every write, and the detail/form pages host
+  `<app-row-audit-badge tableName="PublishStatus" [pkid]="…" />` — see
+  `spec/admin/RowAudit.md`.
 
 ---
 

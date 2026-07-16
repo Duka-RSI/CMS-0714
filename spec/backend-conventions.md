@@ -46,8 +46,8 @@ worked examples to mirror, and `frontend-conventions.md` for the Angular side.
   The three rules that bite: snapshot before/after **inside** the transaction but write the
   audit row **after** `Commit()`; mark JOINed labels and subquery counts `[NotAudited]` on
   the model; `ActionDesc` is `varchar` under a Chinese collation, so its 1000 is **bytes,
-  not characters**. Nothing reads RowAudit back, and there is still no audit badge
-  component despite the `/crud` skill.
+  not characters**. History is read via `GET /api/row-audits` and shown by the
+  `<app-row-audit-badge>` component — see `spec/admin/RowAudit.md`.
 - **Global exception handling**: `Middleware/ExceptionHandlingMiddleware.cs` (outermost in
   the pipeline) turns any unhandled exception into a logged, generic 500 with the same
   `{ message }` body shape controllers use — the caller never sees stack traces, SQL text,

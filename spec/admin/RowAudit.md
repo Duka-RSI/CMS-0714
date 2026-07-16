@@ -143,9 +143,35 @@ value sent is always the surrogate `pkid` (see the trap below). Blank `tableName
 `ORDER BY [DateTime] DESC, pkid DESC` — `pkid` (IDENTITY) breaks ties, since `datetime`
 resolves to ~3.33ms and a burst of edits can share a tick. **Route is `row-audits`**
 (kebab-plural), per `backend-conventions.md`, not the `rowaudit` the original ask spelled.
+The query is capped at **`TOP (200)`** (`RowAuditRepository.MaxHistoryRows`): a row edited
+in place for months carries an unbounded trail, and the badge shows recent changes, not an
+export.
 
-Reachable by **any logged-in user** (no `[Authorize(Roles)]`): the same audience that can
-already read the record can read its history, so it is not a wider disclosure.
+Served off the covering index **`IX_RowAudit_TableName_PrimaryKeyValues`**
+`(TableName, PrimaryKeyValues, [DateTime] DESC, pkid DESC) INCLUDE (UserName, ActionType,
+ActionDesc)`. Without it every history read is a full scan of a table that grows with every
+write in the whole system, so detail pages would get slower with age — and the INCLUDE keeps
+the `nvarchar(max)` value columns out of the read entirely.
+
+#### Authorization: each table's history carries that table's own rules
+
+> ⚠️ **A new audited feature must be added to `RowAuditsController.AuditedTables`**, or its
+> badge shows "無法載入 Unavailable" (the endpoint 400s on an unregistered table).
+
+`AuditedTables` maps every audited table to the role its history requires, mirroring the
+`[Authorize(Roles)]` on that table's own controller: `AppUser`, `AppRole` and `PublishStatus`
+→ **Admin**; `Course`, `CourseGroup`, `Partner`, `FeaturedPromoItem` → any logged-in user.
+Unknown table → **400** (not 401 — the caller is authenticated and merely named a table we
+do not audit); insufficient role → **403**, without querying.
+
+Gating on the caller-supplied `tableName` alone is not optional: the history is not a
+narrower disclosure than the record. AppUser's `ActionDesc` is its **first string property,
+`UserId`** — an email — for Insert/Delete, and the **changed column names** for Update, so an
+ungated endpoint would let any logged-in non-admin walk `?tableName=AppUser&pkid=1..N` and
+harvest every user's email plus when their password was reset and by whom. The lookup is
+**case-insensitive** on purpose: SQL Server's collation is, so `?tableName=appuser` matches
+real rows and an `Ordinal` map would gate the canonical spelling while the lower-cased one
+sailed past.
 
 ### The badge — `core/components/row-audit-badge`
 
@@ -270,10 +296,12 @@ Parameters are typed `DbType.AnsiString` for the `varchar` columns so SqlClient 
 
 ## Tests
 
-`RowAuditWriterTests` (42) mocks `IRowAuditRepository`, so no database is touched. Covers:
+`RowAuditWriterTests` (44) mocks `IRowAuditRepository`, so no database is touched. Covers:
 the value columns — Update stores exactly the changed properties' old/new values (untouched
 ones absent), CJK unescaped, collections as arrays, null→value transitions; Insert stores no
-payloads; Delete snapshots the whole row minus `[NotAudited]` — plus the original set:
+payloads; Delete snapshots the whole row minus `[NotAudited]`; an unserializable value (a
+reference cycle) degrades **that payload** to NULL on both Update and Delete while the row,
+its ActionDesc and the caller all survive — plus the original set:
 Insert/Delete take the first string property (not the first property, not any string
 property, null when it is null or absent); Update lists exactly the changed names in
 declaration order, and writes **nothing** when nothing changed; collections compare
@@ -284,10 +312,16 @@ unauthenticated identity / an absent, empty or whitespace claim; ActionDesc trun
 1000 ASCII characters but **500 Chinese**; UserName at 100 characters; the UTC stamp; and
 that a repository failure and an HttpContext failure are both swallowed.
 
-`RowAuditsControllerTests` (9) mocks `IRowAuditRepository`: the (tableName, pkid) filter is
+`RowAuditsControllerTests` (21) mocks `IRowAuditRepository`: the (tableName, pkid) filter is
 forwarded, the repository's newest-first order is preserved, an empty history is an empty
-`200`, and a blank `tableName`/`pkid` is a 400 that never queries. The SQL `ORDER BY` itself
-is a repository concern, verified live below.
+`200`, and a blank `tableName`/`pkid` is a 400 that never queries. The authorization gate has
+its own set — a non-audited table (`RowAudit`, `SysConfig`, an unknown name) is a 400; a
+non-admin reading `AppUser`/`AppRole`/`PublishStatus` — **and `appuser`, pinning the
+case-insensitive lookup** — is a `ForbidResult`; both never query. An Admin reads them, and a
+non-admin still reads `Course`/`CourseGroup`/`Partner`/`FeaturedPromoItem`. The pipeline side
+(a real 401/403 through the auth stack) lives in `AuthorizationPipelineTests` (4 more: no
+token → 401, non-admin AppUser → 403 without querying, Admin AppUser → 200, non-admin Course
+→ 200). The SQL `ORDER BY` itself is a repository concern, verified live below.
 
 **Frontend** — `row-audit-badge.spec.ts` (10) mocks the HTTP layer: the badge requests the
 right `(tableName, pkid)` and shows the newest change inline; the neutral no-history state;
@@ -363,6 +397,12 @@ opened the dialog — which showed two real inline-edit audit rows (`Update/Sche
 history. The promo board: 21 occupied cells, 21 buttons, zero requests on load, one on click,
 and the friendly empty state for a record that predates the audit system.
 
+> The **per-table authorization gate**, the `TOP (200)` cap and
+> `IX_RowAudit_TableName_PrimaryKeyValues` all landed *after* the live run above (added in
+> review, 2026-07-16). The index is applied to the live DB and `database/admin.sql` is in
+> step; the gate is covered by `RowAuditsControllerTests` + `AuthorizationPipelineTests`
+> rather than re-driven through the browser.
+
 ## Known gaps (deliberate, not oversights)
 
 - **Cascade deletes are invisible.** `FK_Course_CourseGroup` is `ON DELETE CASCADE`, so
@@ -377,6 +417,14 @@ and the friendly empty state for a record that predates the audit system.
   hosts (the Course list, the promo board) use the **compact** variant instead, which fetches
   only on click — so lists still add zero requests on load. Other lists don't carry it yet;
   copy the Course-list pattern when asked.
+- **A trail longer than 200 rows is silently truncated.** `TOP (200)` bounds the read; the
+  dialog shows the most recent 200 changes with no "older" affordance and no count. Paging is
+  the natural next step if a record ever outgrows it.
+- **The badge does not cancel an in-flight request.** Its `effect()` refetches when
+  `tableName`/`pkid` change without unsubscribing the previous call, so a host that swaps
+  records without destroying the badge could render a stale trail (last response wins). No
+  page does that today — every detail/form page sets `pkid` once — so this is latent, not a
+  live bug. `switchMap` over `toObservable(...)` is the fix when a host needs it.
 - **我的帳號 has no badge.** The session and token carry `UserId`, not the surrogate `pkid` the
   audit rows are keyed by, so the self-service page cannot address its own history without a
   new lookup endpoint. Deferred rather than widened.
