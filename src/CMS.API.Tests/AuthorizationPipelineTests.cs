@@ -39,6 +39,7 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
         public Mock<IAppRoleRepository> AppRoleRepository { get; } = new();
         public Mock<ICourseRepository> CourseRepository { get; } = new();
         public Mock<IAppUserRepository> AppUserRepository { get; } = new();
+        public Mock<IRowAuditRepository> RowAuditRepository { get; } = new();
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -62,6 +63,8 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
                 services.AddScoped(_ => CourseRepository.Object);
                 services.RemoveAll<IAppUserRepository>();
                 services.AddScoped(_ => AppUserRepository.Object);
+                services.RemoveAll<IRowAuditRepository>();
+                services.AddScoped(_ => RowAuditRepository.Object);
             });
         }
     }
@@ -362,6 +365,65 @@ public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTes
         var response = await ClientWithToken(token).GetAsync("/api/courses");
 
         // The Admin restriction must not have leaked onto the ordinary features.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // ----- GET /api/row-audits mirrors each table's own authorization -----
+
+    [Fact]
+    public async Task RowAudits_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/row-audits?tableName=Course&pkid=1");
+
+        // The controller has no [AllowAnonymous]; this catches one being added by mistake.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RowAudits_NonAdmin_ReadingAnAdminOnlyTablesHistory_Returns403AndNeverQueries()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token)
+            .GetAsync("/api/row-audits?tableName=AppUser&pkid=903");
+
+        // The AppUser records themselves are Admin-only, so their change history (user ids,
+        // who reset which password and when) must be too.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        // Verified on this test's own pkid: the factory — and so the mock's invocation list —
+        // is shared across the class, and xUnit does not promise an order.
+        _factory.RowAuditRepository.Verify(
+            r => r.GetHistoryAsync(It.IsAny<string>(), "903", It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RowAudits_Admin_ReadingAnAdminOnlyTablesHistory_Returns200()
+    {
+        _factory.RowAuditRepository
+            .Setup(r => r.GetHistoryAsync("AppUser", "901", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var token = await LoginAsync(_factory.CreateClient(), "Admin");
+
+        var response = await ClientWithToken(token)
+            .GetAsync("/api/row-audits?tableName=AppUser&pkid=901");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RowAudits_NonAdmin_ReadingAnOrdinaryTablesHistory_Returns200()
+    {
+        _factory.RowAuditRepository
+            .Setup(r => r.GetHistoryAsync("Course", "1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token)
+            .GetAsync("/api/row-audits?tableName=Course&pkid=1");
+
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 }

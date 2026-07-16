@@ -71,7 +71,9 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
   don't re-litigate). Mark JOINed labels / subquery counts `[NotAudited]` or audits go noisy
   *silently*. `ActionDesc` is a **1000-byte** budget ≈ 500 中文 characters. Every detail/form
   page hosts `<app-row-audit-badge tableName [pkid]>` (`[compact]` on repeated hosts) keyed
-  on the **surrogate `pkid`**, never a string PK. History: `GET /api/row-audits?tableName=&pkid=`.
+  on the **surrogate `pkid`**, never a string PK. History: `GET /api/row-audits?tableName=&pkid=`
+  — register the table in `RowAuditsController.AuditedTables` with the **same role its own
+  controller requires**, or the badge reads "無法載入" (unregistered → 400).
 - **Exceptions** (`spec/backend-conventions.md` / `spec/frontend-conventions.md`): the global
   `ExceptionHandlingMiddleware` logs full detail server-side and returns a generic
   `{ message }` 500 — **no per-controller try/catch**, never leak stack traces or SQL.
