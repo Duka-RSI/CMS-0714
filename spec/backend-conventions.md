@@ -54,4 +54,10 @@ worked examples to mirror, and `frontend-conventions.md` for the Angular side.
   or connection details. **Do not add per-controller try/catch for unexpected errors**;
   deliberate results (400/401/403/404/409) are returned, not thrown, so they pass through
   untouched. Covered end-to-end by `ExceptionHandlingPipelineTests`.
+- **PDF export**: `Pdf/` holds the QuestPDF documents; the licence is declared and the font
+  verified once in `Program.cs`. The font choice is **not** cosmetic — 微軟正黑體 and Noto Sans TC
+  silently corrupt the PDF's text layer (Kangxi radicals), so copy and Ctrl+F break while the
+  page looks perfect. A bulk read for an export gets its own repository method rather than
+  looping `GetByIdAsync` (N+1, and it returns N-N pkids, not the labels a document prints).
+  See `spec/course/CoursePdfExport.md`.
 - CORS allows any loopback origin; Swagger UI is at `/swagger`.

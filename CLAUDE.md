@@ -60,6 +60,7 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
 | `spec/auth/Login.md` | the login endpoint: credential check, JWT claims/lifetime, the SysConfig signing secret |
 | `spec/auth/AppUser.md` | the AppUser feature: password storage, reset-to-default, the N-N with AppRole |
 | `spec/admin/RowAudit.md` | **read before adding a feature or touching a repository write** — the RowAudit writer, `[NotAudited]`, the before/after snapshot rule, the varchar byte budget, the badge |
+| `spec/course/CoursePdfExport.md` | **read before touching the PDF export** — the font trap that silently breaks copy/search, the 3-query read, the blob-error trap, QuestPDF licensing |
 | `spec/code-gen.convention.md` | terse code-gen checklist |
 | `spec/feature-spec.template.md` | spec sections to fill when analysing a table |
 
@@ -74,6 +75,10 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
   on the **surrogate `pkid`**, never a string PK. History: `GET /api/row-audits?tableName=&pkid=`
   — register the table in `RowAuditsController.AuditedTables` with the **same role its own
   controller requires**, or the badge reads "無法載入" (unregistered → 400).
+- **PDF export** (`spec/course/CoursePdfExport.md`): server-side QuestPDF, typeset text — never
+  a screenshot. **Never switch the font to 微軟正黑體 / Noto Sans TC**: they render perfectly and
+  silently write Kangxi *radicals* into the text layer (大→⼤), so copy and Ctrl+F break. 新細明體
+  round-trips; a test enforces it. QuestPDF is Community-licensed (free under 1M USD revenue).
 - **Exceptions** (`spec/backend-conventions.md` / `spec/frontend-conventions.md`): the global
   `ExceptionHandlingMiddleware` logs full detail server-side and returns a generic
   `{ message }` 500 — **no per-controller try/catch**, never leak stack traces or SQL.

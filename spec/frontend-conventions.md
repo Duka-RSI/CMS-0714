@@ -81,6 +81,13 @@ worked examples and `backend-conventions.md` for the API side.
   `RowAudit.PrimaryKeyValues` holds. It injects an HTTP service either way, so any spec that
   renders a page hosting it needs `provideHttpClient()` + `provideHttpClientTesting()`. Full
   detail in `spec/admin/RowAudit.md`.
+- **File downloads**: use `FileDownloadService.save()` (never a bare anchor — it exists so
+  components stay testable) and take the filename from the response's `Content-Disposition`
+  via `filenameFromResponse()`, rather than inventing one. **Trap**: `responseType: 'blob'`
+  applies to the *error* body too, so an API's `{ message }` arrives as an unparsed Blob and
+  `error.error.message` is silently `undefined` — read it with `readErrorMessage()`. The 5xx
+  interceptor hits the same wall and falls back to its generic toast, so a blob caller should
+  report only 4xx or it double-toasts. See `spec/course/CoursePdfExport.md`.
 - **Bundle budget** was raised to 1MB/2MB because PrimeNG's Aura theme pushes the
   initial bundle to ~650kB. `anyComponentStyle` was raised 4kB → 6kB (warning; the 8kB
   error ceiling stands): `app.scss` owns the entire sidebar layout and already sat at

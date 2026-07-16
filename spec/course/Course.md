@@ -11,6 +11,10 @@ Its three FK parents — `Partner`, `CourseGroup`, `PublishStatus` — are all a
 and already ship lookup endpoints, so the dropdowns need no new plumbing. The two N-N
 targets (`Certification`, `JobCategory`) have **no** lookup endpoints yet; both are new.
 
+> The list also exports ticked courses as a merged PDF (`POST /api/courses/pdf`) — see
+> **`spec/course/CoursePdfExport.md`**, and read it before touching the font or adding a
+> field to the detail page that the export should carry too.
+
 | Item | Detail |
 |------|--------|
 | Primary Key | `pkid` **int IDENTITY** (server-assigned; hidden in add, read-only in edit) |
