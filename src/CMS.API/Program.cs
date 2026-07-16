@@ -1,6 +1,8 @@
 using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Middleware;
+using CMS.API.Pdf;
+using QuestPDF.Infrastructure;
 using CMS.API.Repositories;
 using CMS.API.Security;
 using Dapper;
@@ -117,6 +119,15 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// --- PDF export ---
+// QuestPDF refuses to render at all until a license type is declared. Community is the
+// free tier: valid while the company's annual gross revenue stays under 1M USD — revisit
+// this line, not just the package, if that stops being true.
+QuestPDF.Settings.License = LicenseType.Community;
+// Checked once, at startup: a host without the font renders blank Chinese and says nothing,
+// so that is worth hearing about now rather than per download.
+PdfFonts.Verify(app.Services.GetRequiredService<ILogger<Program>>());
 
 // --- Pipeline ---
 // Outermost on purpose: anything the rest of the pipeline throws becomes a logged,

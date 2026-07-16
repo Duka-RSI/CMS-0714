@@ -22,6 +22,19 @@ public interface ICourseRepository
     Task<IEnumerable<Course>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<Course>> QueryAsync(CourseQuery query, CancellationToken cancellationToken = default);
     Task<Course?> GetByIdAsync(int pkid, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The given courses plus their certification / job-category labels, for the PDF export.
+    /// </summary>
+    /// <remarks>
+    /// Three queries regardless of how many pkids are asked for — calling GetByIdAsync per
+    /// course would be an N+1, and GetByIdAsync returns the N-N pkids rather than the names
+    /// the PDF prints. Unknown pkids are simply absent from the result; ordering follows the
+    /// list's own (DisplayOrder, then pkid) so an export reads in the same order as the
+    /// screen it was started from.
+    /// </remarks>
+    Task<IReadOnlyList<CourseExport>> GetForExportAsync(
+        IReadOnlyCollection<int> pkids, CancellationToken cancellationToken = default);
     Task<Course> CreateAsync(CourseRequest request, CancellationToken cancellationToken = default);
     Task<bool> UpdateAsync(CourseRequest request, CancellationToken cancellationToken = default);
 

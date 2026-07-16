@@ -1,6 +1,8 @@
 using CMS.API.Models;
+using CMS.API.Pdf;
 using CMS.API.Repositories;
 using Microsoft.AspNetCore.Mvc;
+using QuestPDF.Fluent;
 
 namespace CMS.API.Controllers;
 
@@ -94,5 +96,68 @@ public class CoursesController : ControllerBase
         }
 
         return result.Deleted ? NoContent() : NotFound();
+    }
+
+    /// <summary>
+    /// The selected courses merged into one PDF, one course per page, in the list's order.
+    /// </summary>
+    /// <remarks>
+    /// Read-only: nothing is written, so there is no RowAudit row. Reachable by any logged-in
+    /// caller, matching the Course endpoints it draws from.
+    /// </remarks>
+    [HttpPost("pdf")]
+    [Produces("application/pdf")]
+    public async Task<IActionResult> ExportPdf(
+        [FromBody] CoursePdfRequest request,
+        [FromServices] TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        // Duplicate ids would print the same course twice; the SQL IN would not catch it.
+        var pkids = request.Pkids.Distinct().ToList();
+        var courses = await _repository.GetForExportAsync(pkids, cancellationToken);
+
+        if (courses.Count == 0)
+        {
+            // Authenticated caller, wrong value -> 400, never 401 (the NG app reads 401 as a
+            // session expiry). Reached when every selected course was deleted meanwhile.
+            return ValidationProblem("找不到選取的課程，可能已被刪除。");
+        }
+
+        // Local time: the footer stamp is read by people in this office, not machines —
+        // unlike RowAudit's DateTime, which is stored UTC and re-stamped by the client.
+        var generatedAt = timeProvider.GetLocalNow().DateTime;
+        var bytes = new CoursePdfDocument(courses, generatedAt).GeneratePdf();
+
+        return File(bytes, "application/pdf", BuildFileName(courses, generatedAt));
+    }
+
+    /// <summary>
+    /// A single course exports under its own CourseId; a merged one is stamped with its count
+    /// and the time, so two exports never collide in the downloads folder.
+    /// </summary>
+    private static string BuildFileName(IReadOnlyList<CourseExport> courses, DateTime generatedAt)
+    {
+        var stamp = generatedAt.ToString("yyyyMMdd-HHmm");
+
+        if (courses.Count == 1)
+        {
+            // CourseId is free text: strip what Windows and the Content-Disposition header
+            // would each choke on rather than hand back a filename the browser discards.
+            var safe = string.Concat(courses[0].Course.CourseId
+                .Where(c => !Path.GetInvalidFileNameChars().Contains(c) && c != '"' && c != ';'))
+                .Trim();
+
+            if (safe.Length > 0)
+            {
+                return $"{safe}-{stamp}.pdf";
+            }
+        }
+
+        return $"courses-{courses.Count}-{stamp}.pdf";
     }
 }

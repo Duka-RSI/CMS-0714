@@ -118,6 +118,81 @@ public sealed class CourseRepository : ICourseRepository
         return course;
     }
 
+    public async Task<IReadOnlyList<CourseExport>> GetForExportAsync(
+        IReadOnlyCollection<int> pkids, CancellationToken cancellationToken = default)
+    {
+        if (pkids.Count == 0)
+        {
+            return [];
+        }
+
+        using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
+
+        // Same columns and order as the list, so the PDF reads like the screen it came from.
+        var courses = (await connection.QueryAsync<Course>(new CommandDefinition(
+            $"SELECT {SelectColumns} {FromJoin} WHERE c.pkid IN @Pkids {OrderBy}",
+            new { Pkids = pkids }, cancellationToken: cancellationToken))).ToList();
+
+        if (courses.Count == 0)
+        {
+            return [];
+        }
+
+        // One query for every course's certifications, one for their job categories — the
+        // labels, not the pkids, since that is what the PDF prints. Certification.Title is
+        // nchar(100): RTRIM here, or every label carries its padding into the document.
+        var certifications = await connection.QueryAsync<CourseLabelRow>(new CommandDefinition(
+            @"SELECT cic.Course_pkid AS CoursePkid,
+                     RTRIM(ct.Title) AS Label,
+                     ct.pkid AS LabelPkid
+              FROM CourseInCertification cic
+              INNER JOIN Certification ct ON ct.pkid = cic.Certification_pkid
+              WHERE cic.Course_pkid IN @Pkids
+              ORDER BY cic.Course_pkid, cic.Certification_pkid",
+            new { Pkids = pkids }, cancellationToken: cancellationToken));
+
+        var jobCategories = await connection.QueryAsync<CourseLabelRow>(new CommandDefinition(
+            @"SELECT cjc.Course_pkid AS CoursePkid,
+                     jc.Description AS Label,
+                     jc.pkid AS LabelPkid
+              FROM CourseJobCategories cjc
+              INNER JOIN JobCategory jc ON jc.pkid = cjc.JobCategory_pkid
+              WHERE cjc.Course_pkid IN @Pkids
+              ORDER BY cjc.Course_pkid, cjc.JobCategory_pkid",
+            new { Pkids = pkids }, cancellationToken: cancellationToken));
+
+        // Certification.Title is nullable: mirror the detail page and fall back to #pkid so
+        // a label is never blank.
+        var certByCourse = GroupLabels(certifications);
+        var jobsByCourse = GroupLabels(jobCategories);
+
+        return courses
+            .Select(course => new CourseExport
+            {
+                Course = course,
+                CertificationLabels = certByCourse.GetValueOrDefault(course.Pkid, []),
+                JobCategoryLabels = jobsByCourse.GetValueOrDefault(course.Pkid, []),
+            })
+            .ToList();
+    }
+
+    /// <summary>One N-N label row, keyed back to its course. Shared by both label queries.</summary>
+    private sealed class CourseLabelRow
+    {
+        public int CoursePkid { get; init; }
+        public string? Label { get; init; }
+        public int LabelPkid { get; init; }
+    }
+
+    private static Dictionary<int, IReadOnlyList<string>> GroupLabels(IEnumerable<CourseLabelRow> rows)
+        => rows
+            .GroupBy(r => r.CoursePkid)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<string>)g
+                    .Select(r => string.IsNullOrWhiteSpace(r.Label) ? $"#{r.LabelPkid}" : r.Label)
+                    .ToList());
+
     private const string WritableColumns = @"
         Title, OfficialTitle, CourseId, ProdCourseId, FriendlyUrl, DisplayOrder,
         Partner_pkid, CourseGroup_pkid, PublishStatus_pkid, ScheduleOn, ScheduleOff,
