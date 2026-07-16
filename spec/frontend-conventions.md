@@ -10,7 +10,9 @@ worked examples and `backend-conventions.md` for the API side.
   comes from `@env/environment` (`apiUrl`) — never hardcode; no dev proxy.
 - **Feature folders**: `features/{table-plural}/{table}-list|-detail|-form/`.
   Data access in `core/services/`, models in `core/models/`.
-- **List page**: sortable/paginated `p-table` + `p-drawer` filter. Persist state in
+- **List page**: sortable/paginated `p-table` + `p-drawer` filter. The paginator renders
+  top **and** bottom (`paginatorPosition="both"`) — one table state, so the two bars are
+  inherently in sync and `(onPage)` still fires once. Persist state in
   sessionStorage under `{entity}-list-filters`, `{entity}-list-sort`,
   `{entity}-list-page`. `p-select` in the drawer uses `appendTo="body"`.
 - **Form page**: Reactive Forms; `forkJoin` for parallel lookup + record load on init.
