@@ -19,9 +19,8 @@ work, skip it otherwise. Keep this file short: every line here costs context on 
 
 .NET 9 Web API (Dapper, no EF) over SQL Server, plus an Angular 20 standalone app (PrimeNG,
 Aura theme). Features are generated one table at a time from the SQL schema; **AppRole** is
-the canonical end-to-end example (PublishStatus, Partner and CourseGroup are further worked
-patterns). No proxy — the frontend reaches the API via `@env/environment` `apiUrl`, so
-**both servers must be running** to use the app.
+the canonical end-to-end example. No proxy — the frontend reaches the API via
+`@env/environment` `apiUrl`, so **both servers must be running** to use the app.
 
 ```
 database/           SQL schema — source of truth (auth/admin/course/promotion.sql)
@@ -54,29 +53,31 @@ ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → c
 
 | Doc | Covers |
 |-----|--------|
-| `spec/backend-conventions.md` | Dapper repo/model/controller patterns; the three PK types; lookup endpoints; nchar/date; N-N; row auditing |
-| `spec/frontend-conventions.md` | standalone component + service + list/detail/form; form PK handling; bit columns; in-place list editing; routing; sidebar; bundle budgets |
+| `spec/backend-conventions.md` | Dapper repo/model/controller patterns; the three PK types; lookup endpoints; nchar/date; N-N; row auditing; global exception middleware |
+| `spec/frontend-conventions.md` | standalone component + service + list/detail/form; form PK handling; bit columns; in-place list editing; routing; sidebar; HTTP error handling; bundle budgets |
 | `spec/reference-features.md` | worked features and their quirks; deferred FK-link buttons; the "adding a feature" workflow |
 | `spec/auth/Authorization.md` | **read before any auth work** — the JWT pipeline, role policies, NG login/guard/interceptors, the password policy, and the traps that fail *silently* |
 | `spec/auth/Login.md` | the login endpoint: credential check, JWT claims/lifetime, the SysConfig signing secret |
 | `spec/auth/AppUser.md` | the AppUser feature: password storage, reset-to-default, the N-N with AppRole |
-| `spec/admin/RowAudit.md` | **read before adding a feature or touching a repository write** — the RowAudit writer, `[NotAudited]`, the before/after snapshot rule, the varchar byte budget |
+| `spec/admin/RowAudit.md` | **read before adding a feature or touching a repository write** — the RowAudit writer, `[NotAudited]`, the before/after snapshot rule, the varchar byte budget, the badge |
 | `spec/code-gen.convention.md` | terse code-gen checklist |
 | `spec/feature-spec.template.md` | spec sections to fill when analysing a table |
 
-## gstack
+## Cross-cutting (checklist for every new feature)
 
-Use the `/browse` skill from gstack (installed at `~/.claude/skills/gstack`) for **all**
-web browsing. Never use the `mcp__claude-in-chrome__*` tools.
-
-Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`,
-`/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`,
-`/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`,
-`/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`,
-`/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`,
-`/document-generate`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`,
-`/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`,
-`/learn`.
+- **Row audit** (`spec/admin/RowAudit.md`): every repository write calls `IRowAuditWriter`
+  (`LogInsertAsync` / `LogUpdateAsync` / `LogDeleteAsync`) — snapshots read **inside** the
+  transaction, audit row written **after** `Commit()` (deliberate — the spec records why;
+  don't re-litigate). Mark JOINed labels / subquery counts `[NotAudited]` or audits go noisy
+  *silently*. `ActionDesc` is a **1000-byte** budget ≈ 500 中文 characters. Every detail/form
+  page hosts `<app-row-audit-badge tableName [pkid]>` (`[compact]` on repeated hosts) keyed
+  on the **surrogate `pkid`**, never a string PK. History: `GET /api/row-audits?tableName=&pkid=`.
+- **Exceptions** (`spec/backend-conventions.md` / `spec/frontend-conventions.md`): the global
+  `ExceptionHandlingMiddleware` logs full detail server-side and returns a generic
+  `{ message }` 500 — **no per-controller try/catch**, never leak stack traces or SQL.
+  Deliberate 400/401/403/404/409 are returned, not thrown. The NG interceptor toasts 5xx and
+  signs out on 401 — **no per-component generic 5xx toasts**; components keep only their
+  business feedback.
 
 ## Gotchas
 
@@ -90,13 +91,11 @@ Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`
 - **Update endpoints sync N-N sets from the request** — never build a PUT from a list row
   (its N-N pkid arrays are empty; they load on GET-by-id only). Fetch the full record, merge,
   then PUT, or the links are silently wiped.
-- **Every repository write is audited** via `IRowAuditWriter` — a new feature must call it
-  too, and must mark its JOINed labels / subquery counts `[NotAudited]` or they get logged
-  as if they were edits (fails *silently*). `ActionDesc` is `varchar(1000)` under a Chinese
-  collation: **1000 bytes = 500 中文 characters**. `BeforeValues`/`AfterValues` (nvarchar(max)
-  JSON) hold an Update's changed values and a Delete's whole-row snapshot — stored only, not
-  served by the API. History is read via `GET /api/row-audits` and shown by
-  `<app-row-audit-badge tableName pkid>` on every detail/form page (`[compact]` on lists) —
-  the badge keys on the **surrogate `pkid`**, not the string PK. See `spec/admin/RowAudit.md`.
 - **`.claude/` is untracked local tooling** — keep it out of commits; never `git add -A`
   blindly.
+
+## gstack
+
+Use gstack's `/browse` skill (installed at `~/.claude/skills/gstack`) for **all** web
+browsing; never the `mcp__claude-in-chrome__*` tools. The other gstack skills appear in the
+session's skill listing — no need to enumerate them here.
