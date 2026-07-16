@@ -115,7 +115,12 @@ builder.Services.AddCors(options =>
     options.AddPolicy(CorsPolicy, policy =>
         policy.SetIsOriginAllowed(origin => new Uri(origin).IsLoopback)
               .AllowAnyHeader()
-              .AllowAnyMethod());
+              .AllowAnyMethod()
+              // AllowAnyHeader covers the REQUEST headers the browser may send; it says nothing
+              // about which RESPONSE headers script may read. Without this, the front end
+              // (:4200 → :5000 is cross-origin — there is no proxy) cannot see the filename the
+              // PDF export chose, falls back to a generic one, and nothing anywhere errors.
+              .WithExposedHeaders("Content-Disposition"));
 });
 
 var app = builder.Build();

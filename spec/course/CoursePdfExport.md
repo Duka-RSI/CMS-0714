@@ -91,7 +91,38 @@ is shared between list and by-id — so the labels are the only thing the export
   `courses-{n}-{yyyyMMdd-HHmm}.pdf`. `CourseId` is free text in the DB, so characters a
   filename or a `Content-Disposition` header cannot carry are stripped; if nothing survives,
   it falls back to the count form. The stamp is **local** time — it is read by people in this
-  office, unlike RowAudit's UTC `DateTime`.
+  office, unlike RowAudit's UTC `DateTime`. **None of this reaches the browser unless CORS
+  exposes the header** — see [The filename](#the-filename-only-exists-if-cors-exposes-it).
+
+## The filename only exists if CORS exposes it
+
+> ⚠️ **`AllowAnyHeader()` does not cover this.** It governs the *request* headers a browser may
+> send. Which *response* headers script may read is a separate, opt-in list.
+
+The app is served from :4200 and the API from :5000 with no proxy, so every call is
+cross-origin. A browser hides every response header from script except a short safelist, and
+`Content-Disposition` is not on it. So the CORS policy in `Program.cs` must say:
+
+```csharp
+.WithExposedHeaders("Content-Disposition")
+```
+
+Without that line the whole filename apparatus above — the stamp, the CourseId, the character
+stripping, the fallback — is **dead code in a browser**. `filenameFromResponse` reads `null`,
+returns its fallback, and every download arrives as `courses-{n}.pdf`. A single-course export
+loses its CourseId entirely. Nothing throws, no console error, no failed request: the PDF
+downloads correctly and is simply named wrong.
+
+**This shipped.** It was found by exporting from a real browser and reading the filename back,
+not by a test — `CoursesControllerPdfTests` covers every filename rule and was green
+throughout, because it calls the action directly and no CORS middleware ever runs. That is the
+gap `CorsPipelineTests` now closes: it drives the endpoint over real HTTP with an `Origin`
+header and asserts `Access-Control-Expose-Headers`. **Verified to fail** with the line removed.
+
+Note what a test *cannot* do here: `HttpClient` is not a browser and enforces no CORS, so it
+reads every header regardless. Asserting the filename over `HttpClient` proves the server
+**sent** it, never that script may **read** it — those are two assertions, and only the
+`Access-Control-Expose-Headers` one guards the bug.
 
 ## Layout
 
@@ -145,7 +176,12 @@ the package version.
   null→dash, one page per course, page-position stamps, a single course fitting one page, a
   120-line outline flowing rather than truncating, the footer stamp, and the metadata title.
 - `CoursesControllerPdfTests` (14) — pkid forwarding, dedup, merge, the 400 for stale rows,
-  the invalid-model short-circuit, and every filename rule.
+  the invalid-model short-circuit, and every filename rule. Calls the action directly, so it
+  proves what the action *returns* and nothing about what a browser *receives*.
+- `CorsPipelineTests` (3) — the endpoint over real HTTP through the whole pipeline, from the
+  browser's origin: the policy matches, `Content-Disposition` is exposed to script, and the
+  header carries the stamped name. The expose assertion is **verified to fail** without
+  `WithExposedHeaders`. Booted with `WebApplicationFactory`, repositories mocked, clock fixed.
 - `CourseQrCodeGeneratorTests` (8) — URL format and escaping (the half that must match the NG
   app), PNG output, determinism, and that an unrenderable QR does not throw.
 - `download.util.spec.ts` (12) / `file-download.service.spec.ts` (1) / `course-list.spec.ts`
@@ -154,4 +190,11 @@ the package version.
 **Not covered by any test:** the repository SQL, as everywhere else in this codebase —
 repositories are mocked at the seam. It was validated directly against the live DB instead:
 the three-join course query, both label joins, and the `nchar` padding that makes the `RTRIM`
-load-bearing. The endpoint has not been driven end-to-end through the HTTP stack.
+load-bearing.
+
+Also not covered, and the reason the CORS bug survived: **nothing asserts what a real browser
+does with the response.** `CorsPipelineTests` asserts the instruction the browser is given, not
+the browser's obedience to it. Closing that last inch needs a browser, and the export was
+smoke-tested through one — ticking rows on the list, downloading, extracting the text back with
+`pdftotext` (real text, `大` = U+5927, no `nchar` padding) and reading the filename off the
+blob. Worth repeating by hand when this feature changes shape.
