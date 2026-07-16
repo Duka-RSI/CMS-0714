@@ -7,6 +7,12 @@ namespace CMS.API.Repositories;
 
 public sealed class RowAuditRepository : IRowAuditRepository
 {
+    /// <summary>
+    /// Cap on one record's returned trail. A record edited in place for months can carry
+    /// thousands of audit rows; the badge dialog shows the recent ones, not an export.
+    /// </summary>
+    private const int MaxHistoryRows = 200;
+
     private readonly IDbConnectionFactory _connectionFactory;
 
     public RowAuditRepository(IDbConnectionFactory connectionFactory)
@@ -49,9 +55,10 @@ public sealed class RowAuditRepository : IRowAuditRepository
         var parameters = new DynamicParameters();
         parameters.Add("TableName", tableName, DbType.AnsiString, size: 50);
         parameters.Add("PrimaryKeyValues", primaryKeyValues, DbType.String, size: 100);
+        parameters.Add("MaxRows", MaxHistoryRows, DbType.Int32);
 
         return await connection.QueryAsync<RowAuditHistoryItem>(new CommandDefinition(
-            @"SELECT [DateTime], UserName, ActionType, ActionDesc
+            @"SELECT TOP (@MaxRows) [DateTime], UserName, ActionType, ActionDesc
               FROM RowAudit
               WHERE TableName = @TableName AND PrimaryKeyValues = @PrimaryKeyValues
               ORDER BY [DateTime] DESC, pkid DESC",
