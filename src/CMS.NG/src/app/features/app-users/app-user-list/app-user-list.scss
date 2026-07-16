@@ -1,0 +1,150 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-header {
+  /* Pin the action bar flush to the top of the scrolling content area; -20px offsets
+     .layout-content's own top padding, which sticky children never cover. */
+  position: sticky;
+  top: -20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.title-block {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: #1e293b;
+}
+
+.subtitle {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Accent the table while a filter is active. */
+.card-filtered {
+  box-shadow:
+    0 0 0 2px #38bdf8,
+    0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Filtered indicator strip */
+.filter-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid #3b82f6;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #1e40af;
+  font-size: 14px;
+}
+
+.filter-banner > .pi-filter-fill {
+  color: #3b82f6;
+}
+
+.filter-banner-label {
+  font-weight: 600;
+}
+
+.filter-banner .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.filter-banner .chip {
+  background: #dbeafe;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 13px;
+}
+
+.filter-banner .chip b {
+  color: #1e3a8a;
+}
+
+.link {
+  color: #2563eb;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.empty {
+  color: #94a3b8;
+  padding: 24px 0;
+}
+
+.filter-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.field input,
+.field :is(p-inputnumber) {
+  width: 100%;
+}
+
+.filter-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.muted {
+  color: #94a3b8;
+}

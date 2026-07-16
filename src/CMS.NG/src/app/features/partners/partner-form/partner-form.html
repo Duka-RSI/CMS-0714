@@ -1,0 +1,125 @@
+<form [formGroup]="form" (ngSubmit)="save()" class="page">
+  <div class="page-header">
+    <h1 class="title">{{ isEdit() ? '編輯合作廠商' : '新增合作廠商' }}</h1>
+    <div class="actions">
+      @if (isEdit()) {
+        <app-row-audit-badge tableName="Partner" [pkid]="recordPkid()" />
+      }
+      <p-button
+        type="button"
+        label="取消"
+        icon="pi pi-times"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="cancel()"
+      />
+      <p-button
+        type="submit"
+        label="儲存"
+        icon="pi pi-check"
+        severity="success"
+        [loading]="saving()"
+      />
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">合作廠商資料</h2>
+
+    @if (isEdit()) {
+      <div class="field">
+        <label for="pkid">主代碼</label>
+        <p-inputNumber inputId="pkid" formControlName="pkid" [useGrouping]="false" />
+        <small class="hint">主代碼為主鍵，編輯時不可修改。</small>
+      </div>
+    }
+
+    <div class="field">
+      <label for="name">名稱 <span class="text-required">*</span></label>
+      <input
+        id="name"
+        type="text"
+        pInputText
+        formControlName="name"
+        maxlength="50"
+        placeholder="請輸入名稱"
+      />
+      @if (form.controls.name.invalid && form.controls.name.touched) {
+        <small class="error">請輸入名稱。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="appKey">關鍵字 <span class="text-required">*</span></label>
+      <input
+        id="appKey"
+        type="text"
+        pInputText
+        formControlName="appKey"
+        maxlength="10"
+        placeholder="請輸入關鍵字 (最多 10 字)"
+      />
+      @if (form.controls.appKey.invalid && form.controls.appKey.touched) {
+        <small class="error">請輸入關鍵字。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="nameOnPartnerMenu">廠商選單顯示名稱 <span class="text-required">*</span></label>
+      <input
+        id="nameOnPartnerMenu"
+        type="text"
+        pInputText
+        formControlName="nameOnPartnerMenu"
+        maxlength="200"
+        placeholder="請輸入廠商選單顯示名稱"
+      />
+      @if (form.controls.nameOnPartnerMenu.invalid && form.controls.nameOnPartnerMenu.touched) {
+        <small class="error">請輸入廠商選單顯示名稱。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="nameOnCourseDetailPage">課程詳細頁顯示名稱 <span class="text-required">*</span></label>
+      <input
+        id="nameOnCourseDetailPage"
+        type="text"
+        pInputText
+        formControlName="nameOnCourseDetailPage"
+        maxlength="50"
+        placeholder="請輸入課程詳細頁顯示名稱"
+      />
+      @if (
+        form.controls.nameOnCourseDetailPage.invalid && form.controls.nameOnCourseDetailPage.touched
+      ) {
+        <small class="error">請輸入課程詳細頁顯示名稱。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="displayOrder">顯示順序 <span class="text-required">*</span></label>
+      <p-inputNumber
+        inputId="displayOrder"
+        formControlName="displayOrder"
+        [useGrouping]="false"
+        [min]="0"
+        placeholder="請輸入顯示順序"
+      />
+      @if (form.controls.displayOrder.invalid && form.controls.displayOrder.touched) {
+        <small class="error">請輸入顯示順序。</small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="imageFilename">圖片檔名</label>
+      <input
+        id="imageFilename"
+        type="text"
+        pInputText
+        formControlName="imageFilename"
+        maxlength="50"
+        placeholder="選填，例如 partner-logo.png"
+      />
+    </div>
+  </div>
+</form>

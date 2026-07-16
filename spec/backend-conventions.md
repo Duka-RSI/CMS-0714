@@ -1,0 +1,63 @@
+# Backend conventions (CMS.API)
+
+Read this when adding or modifying an API feature. See `reference-features.md` for the
+worked examples to mirror, and `frontend-conventions.md` for the Angular side.
+
+- **Dapper only, async, no EF.** Every repo call uses `CommandDefinition` with a
+  `CancellationToken`. Connections come from `IDbConnectionFactory`
+  (`Data/SqlConnectionFactory.cs`), one open connection per operation.
+- **Per feature, three models** in `Models/`: `{Table}.cs` (response, includes
+  nav objects + subquery counts), `{Table}Request.cs` (write DTO), `{Table}Query.cs`
+  (search DTO). Repo interface + impl in `Repositories/`, controller in `Controllers/`.
+- **Register** each repo in `Program.cs` (`AddScoped`).
+- **Routes**: `/api/{table-plural-kebab}`. Standard six endpoints:
+  `GET /`, `POST /query`, `GET /{id}`, `POST /`, `PUT /` (pkid/PK **in body**, no route param),
+  `DELETE /{id}`. Lookups live under `/api/lookups/{plural}`.
+
+## Primary-key handling (three variants)
+
+- **String PKs**: route is `{id}` with no `:int` constraint; the Angular service
+  wraps the value in `encodeURIComponent`. (See AppRole's `RoleId`.)
+- **User-assigned (non-IDENTITY) PKs** (e.g. `PublishStatus.pkid` `tinyint`): the PK
+  column **is** written in the INSERT (no `SCOPE_IDENTITY()`) and is included in the
+  Request model; `Create` guards with `ExistsAsync` → **409 Conflict** on a duplicate.
+  UPDATE keys on it in the `WHERE` only (immutable). The controller route param binds
+  to the CLR type (`byte`/`short`/`int`), no `encodeURIComponent` needed on the client.
+- **Plain numeric IDENTITY PKs** (e.g. `Partner.pkid` `smallint IDENTITY`, `Course.pkid`
+  `int IDENTITY`): the PK is **excluded** from the INSERT and returned via
+  `SELECT CAST(SCOPE_IDENTITY() AS <type>)`; it stays in the Request only for UPDATE
+  (immutable, `WHERE` only). **No `ExistsAsync`/409** on create — the DB assigns the key
+  (add one only if a non-PK column has a UNIQUE constraint). Route param binds to the CLR
+  type (`short` for `smallint`), no `encodeURIComponent`.
+
+## Other backend rules
+
+- **Lookup endpoint when the table is an FK target**: if other tables FK to this one,
+  add a slim `GET /api/lookups/{plural}` returning `{ pkid, <label> }` (extend
+  `ILookupRepository`/`LookupRepository`/`LookupsController` + `lookup.service.ts`).
+  See `Partner` (target of Course/Certification/PartnerCourseGroup) and `CourseGroup`.
+- **`nchar(n)` columns**: always `RTRIM()` in SELECTs.
+- **`date`/`time` columns**: use `DateOnly`/`TimeOnly`; the Dapper type handlers
+  are already registered globally in `Program.cs` (`Data/DapperTypeHandlers.cs`).
+- **N-N**: delete-then-reinsert inside a transaction on save; separate query to
+  read the child id list on GET-by-id. See `AppRoleRepository.SyncUsersAsync`.
+- **Row auditing**: every repository takes `IRowAuditWriter` and logs after each successful
+  Create/Update/Delete — **a new feature must too**. Read `spec/admin/RowAudit.md` first.
+  The three rules that bite: snapshot before/after **inside** the transaction but write the
+  audit row **after** `Commit()`; mark JOINed labels and subquery counts `[NotAudited]` on
+  the model; `ActionDesc` is `varchar` under a Chinese collation, so its 1000 is **bytes,
+  not characters**. History is read via `GET /api/row-audits` and shown by the
+  `<app-row-audit-badge>` component — see `spec/admin/RowAudit.md`.
+- **Global exception handling**: `Middleware/ExceptionHandlingMiddleware.cs` (outermost in
+  the pipeline) turns any unhandled exception into a logged, generic 500 with the same
+  `{ message }` body shape controllers use — the caller never sees stack traces, SQL text,
+  or connection details. **Do not add per-controller try/catch for unexpected errors**;
+  deliberate results (400/401/403/404/409) are returned, not thrown, so they pass through
+  untouched. Covered end-to-end by `ExceptionHandlingPipelineTests`.
+- **PDF export**: `Pdf/` holds the QuestPDF documents; the licence is declared and the font
+  verified once in `Program.cs`. The font choice is **not** cosmetic — 微軟正黑體 and Noto Sans TC
+  silently corrupt the PDF's text layer (Kangxi radicals), so copy and Ctrl+F break while the
+  page looks perfect. A bulk read for an export gets its own repository method rather than
+  looping `GetByIdAsync` (N+1, and it returns N-N pkids, not the labels a document prints).
+  See `spec/course/CoursePdfExport.md`.
+- CORS allows any loopback origin; Swagger UI is at `/swagger`.

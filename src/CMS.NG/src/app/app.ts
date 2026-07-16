@@ -1,19 +1,27 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map } from 'rxjs';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 
-interface NavItem {
+import { AuthService } from '@app/core/services/auth.service';
+
+interface MenuItem {
   label: string;
   icon: string;
   route?: string;
+  /** Level-3 children. An item with children is a collapsible group (no route). */
+  children?: MenuItem[];
+  /** Expand state for a group item. */
+  expanded?: boolean;
 }
 
-interface NavGroup {
-  label: string;
-  icon: string;
-  expanded?: boolean;
-  children: NavItem[];
+interface MenuSection {
+  title: string;
+  items: MenuItem[];
+  /** Hidden entirely from non-Admins. The API enforces the same restriction. */
+  adminOnly?: boolean;
 }
 
 @Component({
@@ -23,39 +31,103 @@ interface NavGroup {
   styleUrl: './app.scss',
 })
 export class App {
+  private readonly router = inject(Router);
+  protected readonly auth = inject(AuthService);
+
   protected readonly title = signal('UWA');
   protected readonly sidebarCollapsed = signal(false);
 
-  // Sidebar navigation. Only 角色 AppRole is wired to a route in this first feature;
-  // add new features under the matching group here (see spec/code-gen.convention.md).
-  protected readonly navGroups = signal<NavGroup[]>([
-    { label: '首頁管理 Home', icon: 'pi pi-home', children: [] },
-    { label: '課程管理 Course', icon: 'pi pi-folder', children: [] },
-    { label: '說明會 Seminar', icon: 'pi pi-comments', children: [] },
-    { label: '活動管理 Promotion', icon: 'pi pi-megaphone', children: [] },
-    { label: '線上報名 Forms', icon: 'pi pi-file-edit', children: [] },
-    { label: '網站資訊 WebInfo', icon: 'pi pi-globe', children: [] },
-    { label: '考試中心 TestingCenter', icon: 'pi pi-verified', children: [] },
+  private readonly currentUrl = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this.router.url },
+  );
+
+  /** The login page renders on its own — no sidebar to navigate with before signing in. */
+  protected readonly showShell = computed(() => !this.currentUrl().startsWith('/login'));
+
+  // Ultima-style sidebar. Three levels are supported:
+  //   section title (L1) → item (L2) → item.children (L3).
+  // An item with `children` renders as a collapsible group; an item with `route`
+  // renders as a link; an item with neither is a placeholder.
+  protected readonly menu = signal<MenuSection[]>([
     {
-      label: '系統管理 Admin',
-      icon: 'pi pi-shield',
-      expanded: true,
-      children: [
-        { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },
-        { label: '使用者 AppUser', icon: 'pi pi-user' },
+      title: '功能選單',
+      items: [
+        {
+          label: '首頁管理 Home',
+          icon: 'pi pi-home',
+          expanded: true,
+          children: [
+            {
+              label: '上稿作業 FeaturedPromoItem',
+              icon: 'pi pi-calendar',
+              route: '/featured-promo-items',
+            },
+          ],
+        },
+        {
+          // Level-2 collapsible group → level-3 links.
+          label: '課程管理 Course',
+          icon: 'pi pi-book',
+          expanded: true,
+          children: [
+            { label: '課程 Course', icon: 'pi pi-book', route: '/courses' },
+            { label: '合作廠商 Partner', icon: 'pi pi-building', route: '/partners' },
+            { label: '課程群組 CourseGroup', icon: 'pi pi-sitemap', route: '/course-groups' },
+          ],
+        },
+        { label: '說明會 Seminar', icon: 'pi pi-comments' },
+        { label: '活動管理 Promotion', icon: 'pi pi-megaphone' },
+        { label: '線上報名 Forms', icon: 'pi pi-file-edit' },
+        { label: '網站資訊 WebInfo', icon: 'pi pi-globe' },
+        { label: '考試中心 TestingCenter', icon: 'pi pi-verified' },
+      ],
+    },
+    {
+      title: '系統管理 Admin',
+      adminOnly: true,
+      items: [
+        {
+          // Level-2 collapsible group → level-3 links.
+          label: '使用者與角色 Access',
+          icon: 'pi pi-users',
+          expanded: true,
+          children: [
+            { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },
+            { label: '使用者 AppUser', icon: 'pi pi-user', route: '/app-users' },
+          ],
+        },
+        { label: '發布狀態 PublishStatus', icon: 'pi pi-flag', route: '/publish-statuses' },
       ],
     },
   ]);
+
+  /**
+   * The menu as this user may see it. Hiding the 系統管理 section is a convenience — the
+   * API rejects non-Admins on those endpoints regardless of what the menu shows.
+   */
+  protected readonly visibleMenu = computed(() =>
+    this.menu().filter((section) => !section.adminOnly || this.auth.isAdmin()),
+  );
 
   toggleSidebar(): void {
     this.sidebarCollapsed.update((v) => !v);
   }
 
-  toggleGroup(group: NavGroup): void {
-    if (group.children.length === 0) {
+  toggleItem(item: MenuItem): void {
+    if (!item.children?.length) {
       return;
     }
-    group.expanded = !group.expanded;
-    this.navGroups.update((groups) => [...groups]);
+    item.expanded = !item.expanded;
+    // Force the signal to re-emit so the template re-renders the mutated item.
+    this.menu.update((sections) => [...sections]);
+  }
+
+  logout(): void {
+    this.auth.logout();
+    this.router.navigateByUrl('/login');
   }
 }

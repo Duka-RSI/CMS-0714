@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MessageService } from 'primeng/api';
@@ -46,6 +48,8 @@ function setup(routeId: string | null) {
       MessageService,
       provideRouter([]),
       provideNoopAnimations(),
+      provideHttpClient(),
+      provideHttpClientTesting(),
       // Must come after provideRouter() so this mock wins over the router's ActivatedRoute.
       {
         provide: ActivatedRoute,
@@ -58,6 +62,19 @@ function setup(routeId: string | null) {
   const component = fixture.componentInstance;
   fixture.detectChanges(); // ngOnInit
   return { fixture, component, roleService, lookupService };
+}
+
+// The toolbar must stay pinned (position: sticky) so 儲存/取消 remain reachable on long forms.
+function expectStickyToolbar(fixture: ComponentFixture<AppRoleForm>): void {
+  const header = (fixture.nativeElement as HTMLElement).querySelector('.page-header')!;
+  const style = getComputedStyle(header);
+  expect(style.position).toBe('sticky');
+  expect(style.top).toBe('-20px');
+  const labels = Array.from(header.querySelectorAll('.actions button')).map(
+    (b) => b.textContent?.trim() ?? '',
+  );
+  expect(labels).toContain('取消');
+  expect(labels).toContain('儲存');
 }
 
 describe('AppRoleForm (add mode)', () => {
@@ -114,6 +131,11 @@ describe('AppRoleForm (add mode)', () => {
     const msg = addSpy.calls.mostRecent().args[0];
     expect(msg.detail).toContain('已存在');
   });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup(null);
+    expectStickyToolbar(fixture);
+  });
 });
 
 describe('AppRoleForm (edit mode)', () => {
@@ -141,5 +163,10 @@ describe('AppRoleForm (edit mode)', () => {
     expect(arg.roleId).toBe('Admin');
     expect(arg.roleName).toBe('Administrator (edited)');
     expect(navSpy).toHaveBeenCalledWith(['/app-roles']);
+  });
+
+  it('renders a sticky action toolbar with 儲存 and 取消', () => {
+    const { fixture } = setup('Admin');
+    expectStickyToolbar(fixture);
   });
 });

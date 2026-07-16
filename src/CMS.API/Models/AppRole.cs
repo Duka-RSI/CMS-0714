@@ -1,3 +1,5 @@
+using CMS.API.Auditing;
+
 namespace CMS.API.Models;
 
 /// <summary>
@@ -13,6 +15,7 @@ public class AppRole
     public string? Description { get; set; }
 
     /// <summary>Number of AppUserRole rows referencing this role ("使用者數"). Subquery count.</summary>
+    [NotAudited]
     public int UserCount { get; set; }
 
     /// <summary>Assigned users (AppUser.UserId). Populated only on GET-by-id.</summary>

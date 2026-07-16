@@ -1,0 +1,79 @@
+<form class="promo-form" [formGroup]="form" (ngSubmit)="save()">
+  <div class="field">
+    <label for="promoCode">PromoCode</label>
+    <div class="control">
+      <p-autoComplete
+        inputId="promoCode"
+        formControlName="promoCode"
+        [suggestions]="suggestions()"
+        [optionLabel]="'promoCode'"
+        [forceSelection]="false"
+        [minLength]="1"
+        [delay]="250"
+        appendTo="body"
+        placeholder="輸入 PromoCode 查詢"
+        (completeMethod)="searchPromotions($event)"
+        (onSelect)="onPromotionSelected($event.value)"
+        (onClear)="onPromoCodeInput()"
+        (input)="onPromoCodeInput()"
+      >
+        <ng-template let-promotion #item>
+          <div class="promo-option">
+            <span class="promo-option-code">{{ promotion.promoCode }}</span>
+            <span class="promo-option-topic">{{ promotion.topic }}</span>
+          </div>
+        </ng-template>
+      </p-autoComplete>
+      @if (form.controls.promoCode.touched && form.controls.promoCode.hasError('required')) {
+        <small class="error">請輸入 PromoCode。</small>
+      }
+      @if (form.controls.promoCode.touched && form.controls.promoCode.hasError('unresolvedPromoCode')) {
+        <small class="error">請從清單中選擇有效的 PromoCode。</small>
+      }
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="topic">Topic</label>
+    <div class="control">
+      <input id="topic" type="text" pInputText formControlName="topic" maxlength="100" />
+      @if (form.controls.topic.touched && form.controls.topic.hasError('required')) {
+        <small class="error">請輸入 Topic。</small>
+      }
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="description">Description</label>
+    <div class="control">
+      <input id="description" type="text" pInputText formControlName="description" maxlength="300" />
+      @if (form.controls.description.touched && form.controls.description.hasError('required')) {
+        <small class="error">請輸入 Description。</small>
+      }
+    </div>
+  </div>
+
+  <div class="form-actions">
+    @if (isEdit()) {
+      <app-row-audit-badge tableName="FeaturedPromoItem" [pkid]="recordPkid()" />
+    }
+    <p-button
+      type="button"
+      label="取消"
+      icon="pi pi-times"
+      severity="secondary"
+      [outlined]="true"
+      size="small"
+      [disabled]="saving()"
+      (onClick)="cancel()"
+    />
+    <p-button
+      type="submit"
+      label="儲存"
+      icon="pi pi-check"
+      size="small"
+      [loading]="saving()"
+      [disabled]="saving()"
+    />
+  </div>
+</form>

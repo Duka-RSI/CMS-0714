@@ -1,0 +1,429 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using CMS.API.Models;
+using CMS.API.Repositories;
+using CMS.API.Security;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.IdentityModel.Tokens;
+using Moq;
+using Xunit;
+
+namespace CMS.API.Tests;
+
+/// <summary>
+/// End-to-end tests for the authorization pipeline, booted through <see cref="WebApplicationFactory{T}"/>.
+/// </summary>
+/// <remarks>
+/// Controller unit tests call actions directly and therefore bypass authentication entirely —
+/// they cannot tell whether the middleware is wired up at all. These tests drive the real
+/// pipeline over HTTP. The database is never touched: every repository is replaced with a
+/// mock, including the SysConfig-backed signing key.
+/// </remarks>
+public class AuthorizationPipelineTests : IClassFixture<AuthorizationPipelineTests.Factory>
+{
+    private const string SigningKey = "cloud4fun#123456cloud4fun#123456";
+    private const string Password = "CMS4fun#";
+
+    private readonly Factory _factory;
+
+    public AuthorizationPipelineTests(Factory factory) => _factory = factory;
+
+    public class Factory : WebApplicationFactory<Program>
+    {
+        public Mock<IAuthRepository> AuthRepository { get; } = new();
+        public Mock<IAppRoleRepository> AppRoleRepository { get; } = new();
+        public Mock<ICourseRepository> CourseRepository { get; } = new();
+        public Mock<IAppUserRepository> AppUserRepository { get; } = new();
+        public Mock<IRowAuditRepository> RowAuditRepository { get; } = new();
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Development");
+            builder.ConfigureServices(services =>
+            {
+                // Swap every repository the tested endpoints touch for a mock, plus the signing
+                // key provider — so nothing here reaches SQL Server.
+                services.RemoveAll<ISigningKeyProvider>();
+                var signingKeys = new Mock<ISigningKeyProvider>();
+                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey));
+                signingKeys.Setup(k => k.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(key);
+                signingKeys.Setup(k => k.Get()).Returns(key);
+                services.AddSingleton(signingKeys.Object);
+
+                services.RemoveAll<IAuthRepository>();
+                services.AddScoped(_ => AuthRepository.Object);
+                services.RemoveAll<IAppRoleRepository>();
+                services.AddScoped(_ => AppRoleRepository.Object);
+                services.RemoveAll<ICourseRepository>();
+                services.AddScoped(_ => CourseRepository.Object);
+                services.RemoveAll<IAppUserRepository>();
+                services.AddScoped(_ => AppUserRepository.Object);
+                services.RemoveAll<IRowAuditRepository>();
+                services.AddScoped(_ => RowAuditRepository.Object);
+            });
+        }
+    }
+
+    /// <summary>Logs in through the real endpoint and returns the issued token.</summary>
+    private async Task<string> LoginAsync(HttpClient client, params string[] roleIds)
+    {
+        _factory.AuthRepository
+            .Setup(r => r.GetCredentialAsync("miles@uuu.com.tw", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AppUserCredential
+            {
+                UserId = "miles@uuu.com.tw",
+                UserName = "Miles",
+                IsActive = true,
+                PasswordHash = PasswordHasher.Hash(Password),
+                RoleIds = [.. roleIds],
+            });
+
+        var response = await client.PostAsJsonAsync("/api/Auth/login",
+            new { userId = "miles@uuu.com.tw", password = Password });
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        return payload!.AccessToken;
+    }
+
+    private HttpClient ClientWithToken(string token)
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    // ----- AuthController stays anonymous -----
+
+    [Fact]
+    public async Task Login_IsReachableWithoutTheBearerToken()
+    {
+        var client = _factory.CreateClient();
+
+        var token = await LoginAsync(client);
+
+        // Reaching a 200 at all proves the endpoint opted out of the global fallback policy.
+        Assert.False(string.IsNullOrWhiteSpace(token));
+    }
+
+    [Fact]
+    public async Task Login_WithBadCredentials_Returns401FromTheControllerNotTheMiddleware()
+    {
+        _factory.AuthRepository
+            .Setup(r => r.GetCredentialAsync("ghost@uuu.com.tw", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((AppUserCredential?)null);
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/Auth/login",
+            new { userId = "ghost@uuu.com.tw", password = "whatever" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // The controller's own message — proof this is the credential check, not the guard.
+        Assert.Contains("使用者代碼或密碼錯誤", await response.Content.ReadAsStringAsync());
+    }
+
+    // ----- AuthController's own protected action -----
+
+    [Fact]
+    public async Task UpdateProfile_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PutAsJsonAsync("/api/Auth/profile", new { userName = "Anyone" });
+
+        // [AllowAnonymous] sits on the controller: without its own [Authorize], this action
+        // would inherit it and let anyone rename... nobody in particular. This is the test
+        // that catches that attribute going missing.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_WithAValidToken_RenamesTheTokenUserAndIgnoresTheBodyUserId()
+    {
+        _factory.AuthRepository
+            .Setup(r => r.UpdateUserNameAsync("miles@uuu.com.tw", "Renamed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token)
+            .PutAsJsonAsync("/api/Auth/profile", new { userId = "victim@uuu.com.tw", userName = "Renamed" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<UserProfileResponse>();
+        Assert.Equal("miles@uuu.com.tw", payload!.UserId);
+        // End-to-end proof that the body's userId is inert: the victim is never touched.
+        _factory.AuthRepository.Verify(
+            r => r.UpdateUserNameAsync("victim@uuu.com.tw", It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_WithABlankUserName_Returns400()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token).PutAsJsonAsync("/api/Auth/profile", new { userName = "   " });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/Auth/change-password",
+            new { currentPassword = "x", newPassword = "Str0ng!pass", confirmPassword = "Str0ng!pass" });
+
+        // Same trap as UpdateProfile: [AllowAnonymous] on the controller would make this
+        // public without the action's own [Authorize].
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithAWrongCurrentPassword_Returns400SoTheClientStaysSignedIn()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+        // The factory (and its mocks) are shared across this class, so recorded invocations
+        // accumulate. Clear them here or "was never called" would be asserting about every
+        // test that ran before this one.
+        _factory.AuthRepository.Invocations.Clear();
+
+        var response = await ClientWithToken(token).PostAsJsonAsync("/api/Auth/change-password",
+            new { currentPassword = "wrong", newPassword = "Str0ng!pass", confirmPassword = "Str0ng!pass" });
+
+        // Through the real pipeline: a 401 here would sign the user out client-side.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        _factory.AuthRepository.Verify(
+            r => r.UpdatePasswordAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangePassword_WithAValidChange_Returns204AndLeaksNoHash()
+    {
+        _factory.AuthRepository
+            .Setup(r => r.UpdatePasswordAsync("miles@uuu.com.tw", PasswordHasher.Hash("Str0ng!pass"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token).PostAsJsonAsync("/api/Auth/change-password",
+            new { currentPassword = Password, newPassword = "Str0ng!pass", confirmPassword = "Str0ng!pass" });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+    }
+
+    // ----- Everything else requires a token -----
+
+    [Theory]
+    [InlineData("/api/courses")]
+    [InlineData("/api/app-roles")]
+    [InlineData("/api/lookups/app-roles")]
+    public async Task ProtectedEndpoint_WithoutAToken_Returns401(string url)
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProtectedEndpoint_WithAGarbageToken_Returns401()
+    {
+        var client = ClientWithToken("not-a-real-jwt");
+
+        var response = await client.GetAsync("/api/courses");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProtectedEndpoint_WithATokenSignedByTheWrongKey_Returns401()
+    {
+        var foreignKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(new string('x', 32)));
+        var foreignKeys = new Mock<ISigningKeyProvider>();
+        foreignKeys.Setup(k => k.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(foreignKey);
+        var forged = await new JwtTokenService(foreignKeys.Object)
+            .CreateAccessTokenAsync("miles@uuu.com.tw", "Miles", ["Admin"]);
+
+        var response = await ClientWithToken(forged).GetAsync("/api/courses");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProtectedEndpoint_WithAValidToken_Returns200()
+    {
+        _factory.CourseRepository
+            .Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token).GetAsync("/api/courses");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // ----- Admin-only endpoints -----
+
+    [Fact]
+    public async Task AdminEndpoint_WithANonAdminToken_Returns403()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token).GetAsync("/api/app-roles");
+
+        // Authenticated but not entitled — 403, not 401.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminEndpoint_WithAnAdminToken_Returns200()
+    {
+        _factory.AppRoleRepository
+            .Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var token = await LoginAsync(_factory.CreateClient(), "Admin", "User");
+
+        var response = await ClientWithToken(token).GetAsync("/api/app-roles");
+
+        // Proves the "role" claim survives validation and reaches [Authorize(Roles = "Admin")].
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // ----- Reset a user's password to the SysConfig default (Admin only) -----
+
+    [Fact]
+    public async Task ResetPassword_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsync("/api/app-users/test/reset-password", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WithANonAdminToken_Returns403AndResetsNothing()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+        _factory.AppUserRepository.Invocations.Clear();
+
+        var response = await ClientWithToken(token).PostAsync("/api/app-users/test/reset-password", null);
+
+        // Enforced by the API, not by hiding the button.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        _factory.AppUserRepository.Verify(
+            r => r.ResetPasswordAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WithAnAdminToken_Returns204AndLeaksNoHash()
+    {
+        _factory.AppUserRepository
+            .Setup(r => r.ResetPasswordAsync("test", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var token = await LoginAsync(_factory.CreateClient(), "Admin");
+
+        var response = await ClientWithToken(token).PostAsync("/api/app-users/test/reset-password", null);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        // Success/failure only — no password and no hash come back.
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+        _factory.AppUserRepository.Verify(
+            r => r.ResetPasswordAsync("test", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ResetPassword_ForAnUnknownUser_Returns404()
+    {
+        _factory.AppUserRepository
+            .Setup(r => r.ResetPasswordAsync("ghost", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var token = await LoginAsync(_factory.CreateClient(), "Admin");
+
+        var response = await ClientWithToken(token).PostAsync("/api/app-users/ghost/reset-password", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NonAdminEndpoint_IsReachableByANonAdmin()
+    {
+        _factory.CourseRepository
+            .Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token).GetAsync("/api/courses");
+
+        // The Admin restriction must not have leaked onto the ordinary features.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // ----- GET /api/row-audits mirrors each table's own authorization -----
+
+    [Fact]
+    public async Task RowAudits_WithoutAToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/row-audits?tableName=Course&pkid=1");
+
+        // The controller has no [AllowAnonymous]; this catches one being added by mistake.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RowAudits_NonAdmin_ReadingAnAdminOnlyTablesHistory_Returns403AndNeverQueries()
+    {
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token)
+            .GetAsync("/api/row-audits?tableName=AppUser&pkid=903");
+
+        // The AppUser records themselves are Admin-only, so their change history (user ids,
+        // who reset which password and when) must be too.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        // Verified on this test's own pkid: the factory — and so the mock's invocation list —
+        // is shared across the class, and xUnit does not promise an order.
+        _factory.RowAuditRepository.Verify(
+            r => r.GetHistoryAsync(It.IsAny<string>(), "903", It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RowAudits_Admin_ReadingAnAdminOnlyTablesHistory_Returns200()
+    {
+        _factory.RowAuditRepository
+            .Setup(r => r.GetHistoryAsync("AppUser", "901", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var token = await LoginAsync(_factory.CreateClient(), "Admin");
+
+        var response = await ClientWithToken(token)
+            .GetAsync("/api/row-audits?tableName=AppUser&pkid=901");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RowAudits_NonAdmin_ReadingAnOrdinaryTablesHistory_Returns200()
+    {
+        _factory.RowAuditRepository
+            .Setup(r => r.GetHistoryAsync("Course", "1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var token = await LoginAsync(_factory.CreateClient(), "User");
+
+        var response = await ClientWithToken(token)
+            .GetAsync("/api/row-audits?tableName=Course&pkid=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+}

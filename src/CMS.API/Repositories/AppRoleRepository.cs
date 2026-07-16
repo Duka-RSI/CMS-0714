@@ -1,4 +1,5 @@
 using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -7,11 +8,15 @@ namespace CMS.API.Repositories;
 
 public sealed class AppRoleRepository : IAppRoleRepository
 {
-    private readonly IDbConnectionFactory _connectionFactory;
+    private const string AuditTableName = "AppRole";
 
-    public AppRoleRepository(IDbConnectionFactory connectionFactory)
+    private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IRowAuditWriter _rowAudit;
+
+    public AppRoleRepository(IDbConnectionFactory connectionFactory, IRowAuditWriter rowAudit)
     {
         _connectionFactory = connectionFactory;
+        _rowAudit = rowAudit;
     }
 
     // Base projection. UserCount is a correlated subquery over the AppUserRole junction.
@@ -85,6 +90,10 @@ public sealed class AppRoleRepository : IAppRoleRepository
 
         var created = await GetByIdAsync(connection, transaction, request.RoleId, cancellationToken);
         transaction.Commit();
+
+        // Audited after the commit: the row is durable, and a failed audit write must not
+        // take a committed change down with it.
+        await _rowAudit.LogInsertAsync(AuditTableName, created!, cancellationToken);
         return created!;
     }
 
@@ -92,6 +101,15 @@ public sealed class AppRoleRepository : IAppRoleRepository
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
+
+        // Both snapshots are read inside the transaction, so the diff cannot straddle
+        // somebody else's concurrent edit.
+        var before = await GetByIdAsync(connection, transaction, request.RoleId, cancellationToken);
+        if (before is null)
+        {
+            transaction.Rollback();
+            return false;
+        }
 
         // RoleId is the immutable primary key — never updated.
         var affected = await connection.ExecuteAsync(new CommandDefinition(
@@ -107,7 +125,10 @@ public sealed class AppRoleRepository : IAppRoleRepository
         }
 
         await SyncUsersAsync(connection, transaction, request.RoleId, request.UserIds, cancellationToken);
+        var after = await GetByIdAsync(connection, transaction, request.RoleId, cancellationToken);
         transaction.Commit();
+
+        await _rowAudit.LogUpdateAsync(AuditTableName, before, after!, cancellationToken);
         return true;
     }
 
@@ -115,6 +136,14 @@ public sealed class AppRoleRepository : IAppRoleRepository
     {
         using var connection = await _connectionFactory.CreateOpenConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
+
+        // Read the row before it goes: ActionDesc is its RoleId.
+        var deleted = await GetByIdAsync(connection, transaction, roleId, cancellationToken);
+        if (deleted is null)
+        {
+            transaction.Rollback();
+            return false;
+        }
 
         await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM AppUserRole WHERE RoleId = @RoleId",
@@ -125,7 +154,14 @@ public sealed class AppRoleRepository : IAppRoleRepository
             new { RoleId = roleId }, transaction, cancellationToken: cancellationToken));
 
         transaction.Commit();
-        return affected > 0;
+
+        if (affected == 0)
+        {
+            return false;
+        }
+
+        await _rowAudit.LogDeleteAsync(AuditTableName, deleted, cancellationToken);
+        return true;
     }
 
     public async Task<bool> ExistsAsync(string roleId, CancellationToken cancellationToken = default)

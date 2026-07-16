@@ -1,56 +1,121 @@
-<div class="app-shell" [class.sidebar-collapsed]="sidebarCollapsed()">
-  <!-- Sidebar -->
-  <aside class="app-sidebar">
-    <div class="brand">
-      <span class="brand-name" [hidden]="sidebarCollapsed()">{{ title() }}</span>
-      <button type="button" class="brand-toggle" (click)="toggleSidebar()" aria-label="toggle sidebar">
-        <i class="pi" [class.pi-angle-left]="!sidebarCollapsed()" [class.pi-angle-right]="sidebarCollapsed()"></i>
-      </button>
-    </div>
+@if (showShell()) {
+  <div class="layout" [class.layout-slim]="sidebarCollapsed()">
+    <!-- Sidebar (Ultima style) -->
+    <aside class="layout-sidebar">
+      <div class="sidebar-logo">
+        <i class="pi pi-box logo-mark"></i>
+        <span class="logo-text">{{ title() }}</span>
+        <button
+          type="button"
+          class="slim-toggle"
+          (click)="toggleSidebar()"
+          aria-label="toggle sidebar"
+        >
+          <i class="pi" [class.pi-angle-left]="!sidebarCollapsed()" [class.pi-angle-right]="sidebarCollapsed()"></i>
+        </button>
+      </div>
 
-    <nav class="nav">
-      @for (group of navGroups(); track group.label) {
-        <div class="nav-group">
-          <button
-            type="button"
-            class="nav-group-header"
-            [class.expandable]="group.children.length > 0"
-            (click)="toggleGroup(group)"
-          >
-            <i class="nav-icon" [class]="group.icon"></i>
-            <span class="nav-label">{{ group.label }}</span>
-            @if (group.children.length > 0) {
-              <i class="nav-caret pi" [class.pi-angle-down]="group.expanded" [class.pi-angle-right]="!group.expanded"></i>
-            }
-          </button>
+      <nav class="layout-menu">
+        @for (section of visibleMenu(); track section.title) {
+          <div class="menu-section">
+            <div class="menu-section-title">{{ section.title }}</div>
 
-          @if (group.expanded && group.children.length > 0) {
-            <div class="nav-children">
-              @for (item of group.children; track item.label) {
-                @if (item.route) {
-                  <a class="nav-child" [routerLink]="item.route" routerLinkActive="active">
-                    <i class="nav-icon" [class]="item.icon"></i>
-                    <span class="nav-label">{{ item.label }}</span>
+            @for (item of section.items; track item.label) {
+              <div class="menu-node" [class.has-children]="item.children?.length">
+                @if (item.children?.length) {
+                  <!-- Level-2 collapsible group -->
+                  <button
+                    type="button"
+                    class="menu-item menu-toggle"
+                    [class.expanded]="item.expanded"
+                    (click)="toggleItem(item)"
+                    [title]="item.label"
+                  >
+                    <i class="menu-item-icon" [class]="item.icon"></i>
+                    <span class="menu-item-text">{{ item.label }}</span>
+                    <i class="menu-toggler pi pi-angle-down"></i>
+                  </button>
+
+                  <!-- Level-3 submenu (animated open/close; flyout in slim mode) -->
+                  <div class="submenu" [class.open]="item.expanded">
+                    <div class="submenu-inner">
+                      <div class="submenu-title">{{ item.label }}</div>
+                      @for (child of item.children; track child.label) {
+                        @if (child.route) {
+                          <a
+                            class="menu-item submenu-item"
+                            [routerLink]="child.route"
+                            routerLinkActive="active-route"
+                            [title]="child.label"
+                          >
+                            <i class="menu-item-icon" [class]="child.icon"></i>
+                            <span class="menu-item-text">{{ child.label }}</span>
+                          </a>
+                        } @else {
+                          <span class="menu-item submenu-item disabled" [title]="child.label">
+                            <i class="menu-item-icon" [class]="child.icon"></i>
+                            <span class="menu-item-text">{{ child.label }}</span>
+                          </span>
+                        }
+                      }
+                    </div>
+                  </div>
+                } @else if (item.route) {
+                  <!-- Level-2 leaf link -->
+                  <a
+                    class="menu-item"
+                    [routerLink]="item.route"
+                    routerLinkActive="active-route"
+                    [title]="item.label"
+                  >
+                    <i class="menu-item-icon" [class]="item.icon"></i>
+                    <span class="menu-item-text">{{ item.label }}</span>
                   </a>
                 } @else {
-                  <span class="nav-child disabled">
-                    <i class="nav-icon" [class]="item.icon"></i>
-                    <span class="nav-label">{{ item.label }}</span>
+                  <!-- Level-2 placeholder -->
+                  <span class="menu-item disabled" [title]="item.label">
+                    <i class="menu-item-icon" [class]="item.icon"></i>
+                    <span class="menu-item-text">{{ item.label }}</span>
                   </span>
                 }
-              }
-            </div>
-          }
+              </div>
+            }
+          </div>
+        }
+      </nav>
+
+      <!-- Signed-in user + logout -->
+      @if (auth.isAuthenticated()) {
+        <div class="sidebar-user">
+          <!-- The whole block is the way to 我的帳號. The avatar stays visible in slim
+               mode, so the link survives there too. -->
+          <a
+            class="user-link"
+            routerLink="/profile"
+            routerLinkActive="active-route"
+            title="我的帳號"
+          >
+            <span class="user-avatar"><i class="pi pi-user"></i></span>
+            <span class="user-meta">
+              <span class="user-name">{{ auth.userName() }}</span>
+              <span class="user-id">{{ auth.profile()?.userId }}</span>
+            </span>
+          </a>
+          <button type="button" class="logout-btn" (click)="logout()" title="登出" aria-label="登出">
+            <i class="pi pi-sign-out"></i>
+          </button>
         </div>
       }
-    </nav>
-  </aside>
+    </aside>
 
-  <!-- Content -->
-  <main class="app-content">
-    <router-outlet />
-  </main>
-</div>
+    <!-- Content -->
+    <main class="layout-content">
+      <router-outlet />
+    </main>
+  </div>
+} @else {
+  <router-outlet />
+}
 
 <p-toast position="top-right" />
 <p-confirmdialog />

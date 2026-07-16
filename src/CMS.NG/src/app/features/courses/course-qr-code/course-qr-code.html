@@ -1,0 +1,17 @@
+<div class="qr-block">
+  @if (qrDataUrl(); as dataUrl) {
+    <span class="qr-title">{{ courseId() }}</span>
+    <img class="qr-image" [src]="dataUrl" [alt]="'課程 ' + courseId() + ' 的 QR Code'" />
+    <a class="qr-url" [href]="targetUrl()" target="_blank" rel="noopener">{{ targetUrl() }}</a>
+    <p-button
+      label="下載 QR Code"
+      icon="pi pi-download"
+      severity="secondary"
+      [outlined]="true"
+      size="small"
+      (onClick)="download()"
+    />
+  } @else if (failed()) {
+    <span class="qr-error">QR Code 產生失敗。</span>
+  }
+</div>

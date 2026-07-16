@@ -1,0 +1,74 @@
+/* Sits inside the board's card, so it follows the same hex palette as the form pages. */
+.promo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.field {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.field label {
+  flex: 0 0 6.5rem;
+  padding-top: 7px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #334155;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.control input,
+.control p-autocomplete,
+.control p-autoComplete {
+  width: 100%;
+}
+
+/* p-autoComplete renders its own <input> inside its template, so encapsulated styles
+   can't reach it and it keeps its intrinsic width. Stretch it to line up with the
+   plain inputs in the fields below. */
+.control ::ng-deep .p-autocomplete-input {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.error {
+  color: #ef4444;
+  font-size: 12px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.promo-option {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.promo-option-code {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.promo-option-topic {
+  color: #94a3b8;
+  font-size: 13px;
+}

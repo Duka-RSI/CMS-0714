@@ -1,110 +1,108 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working in this repository.
+Always-loaded orientation. Detail lives in `spec/` — read the relevant doc before feature
+work, skip it otherwise. Keep this file short: every line here costs context on every task.
 
-## Overview
+## Working agreements
 
-Full-stack CMS. Backend is a .NET 9 Web API (Dapper, no EF) over a SQL Server
-database; frontend is an Angular 20 standalone app using PrimeNG. Code is
-generated feature-by-feature from the SQL schema following the conventions in
-`spec/code-gen.convention.md`. The first implemented feature is **AppRole** —
-use it as the reference pattern for every new feature.
+- **Reply to the user in Traditional Chinese (繁體中文).** Code, identifiers, commit
+  messages and docs stay in English.
+- **Never switch ports.** API 5000, frontend 4200 — always. If one is occupied (usually a
+  stale dev server), find the process (`netstat -ano`), confirm it is `node` / `CMS.API`,
+  kill it, and reuse the port. No alternate-port launch configs, no letting tooling auto-pick.
+- **Commit straight to `develop`** — it is the main branch and the intended target. Do not
+  open a feature branch first, and do not ask whether to. Only commit/push when asked.
+- **Record new conventions and decisions as they are made** — the detail goes in the
+  matching `spec/*.md`; keep only a pointer or a one-line gotcha here.
 
-## Layout
+## Stack & layout
+
+.NET 9 Web API (Dapper, no EF) over SQL Server, plus an Angular 20 standalone app (PrimeNG,
+Aura theme). Features are generated one table at a time from the SQL schema; **AppRole** is
+the canonical end-to-end example. No proxy — the frontend reaches the API via
+`@env/environment` `apiUrl`, so **both servers must be running** to use the app.
 
 ```
-database/            SQL schema files (source of truth: auth.sql, admin.sql, course.sql, promotion.sql)
-spec/                Conventions + per-feature build specs (code-gen.convention.md, sample*.spec.md, ui-sample-*.png)
-global.json          Pins the .NET SDK to 9.x (rollForward latestFeature)
-src/
-  CMS.sln
-  CMS.API/           .NET 9 Web API (Dapper)
-  CMS.API.Tests/     xUnit + Moq (controller tests, no DB)
-  CMS.NG/            Angular 20 standalone + PrimeNG
+database/           SQL schema — source of truth (auth/admin/course/promotion.sql)
+spec/               Conventions, per-feature build specs, reference docs
+src/CMS.API/        .NET 9 Web API (Dapper); solution file: src/CMS.sln
+src/CMS.API.Tests/  xUnit + Moq; repositories are mocked — never hits the DB
+src/CMS.NG/         Angular 20 standalone + PrimeNG
 ```
 
 ## Commands
 
-Backend (run from `src/`):
+Backend (from `src/`) — **stop the running API first**: a live `dotnet run` locks
+`CMS.API.exe` and the build fails with MSB3027.
+
 ```powershell
-dotnet build CMS.sln                              # build all
-dotnet run --project CMS.API --urls http://localhost:5000   # API → :5000, Swagger at /swagger
-dotnet test CMS.API.Tests                          # xUnit tests
+dotnet build CMS.sln
+dotnet run --project CMS.API --urls http://localhost:5000   # Swagger at /swagger
+dotnet test CMS.API.Tests
 ```
 
-Frontend (run from `src/CMS.NG/`):
+Frontend (from `src/CMS.NG/`):
+
 ```powershell
 ng serve                                           # dev server → :4200
-ng build                                            # production build
-ng test --watch=false --browsers=ChromeHeadless    # Karma/Jasmine (set $env:CHROME_BIN to chrome.exe)
+ng build
+ng test --watch=false --browsers=ChromeHeadless    # needs $env:CHROME_BIN → chrome.exe
 ```
 
-Both servers must be running to use the app: the frontend calls the API directly
-(no proxy) via `environment.ts`.
+## Reference docs (read the relevant one before feature work)
 
-## Backend conventions (CMS.API)
+| Doc | Covers |
+|-----|--------|
+| `spec/backend-conventions.md` | Dapper repo/model/controller patterns; the three PK types; lookup endpoints; nchar/date; N-N; row auditing; global exception middleware |
+| `spec/frontend-conventions.md` | standalone component + service + list/detail/form; form PK handling; bit columns; in-place list editing; routing; sidebar; HTTP error handling; bundle budgets |
+| `spec/reference-features.md` | worked features and their quirks; deferred FK-link buttons; the "adding a feature" workflow |
+| `spec/auth/Authorization.md` | **read before any auth work** — the JWT pipeline, role policies, NG login/guard/interceptors, the password policy, and the traps that fail *silently* |
+| `spec/auth/Login.md` | the login endpoint: credential check, JWT claims/lifetime, the SysConfig signing secret |
+| `spec/auth/AppUser.md` | the AppUser feature: password storage, reset-to-default, the N-N with AppRole |
+| `spec/admin/RowAudit.md` | **read before adding a feature or touching a repository write** — the RowAudit writer, `[NotAudited]`, the before/after snapshot rule, the varchar byte budget, the badge |
+| `spec/course/CoursePdfExport.md` | **read before touching the PDF export** — the font trap that silently breaks copy/search, the 3-query read, the blob-error trap, QuestPDF licensing |
+| `spec/code-gen.convention.md` | terse code-gen checklist |
+| `spec/feature-spec.template.md` | spec sections to fill when analysing a table |
 
-- **Dapper only, async, no EF.** Every repo call uses `CommandDefinition` with a
-  `CancellationToken`. Connections come from `IDbConnectionFactory`
-  (`Data/SqlConnectionFactory.cs`), one open connection per operation.
-- **Per feature, three models** in `Models/`: `{Table}.cs` (response, includes
-  nav objects + subquery counts), `{Table}Request.cs` (write DTO), `{Table}Query.cs`
-  (search DTO). Repo interface + impl in `Repositories/`, controller in `Controllers/`.
-- **Register** each repo in `Program.cs` (`AddScoped`).
-- **Routes**: `/api/{table-plural-kebab}`. Standard six endpoints:
-  `GET /`, `POST /query`, `GET /{id}`, `POST /`, `PUT /` (pkid/PK **in body**, no route param),
-  `DELETE /{id}`. Lookups live under `/api/lookups/{plural}`.
-- **String PKs**: route is `{id}` with no `:int` constraint; the Angular service
-  wraps the value in `encodeURIComponent`.
-- **`nchar(n)` columns**: always `RTRIM()` in SELECTs.
-- **`date`/`time` columns**: use `DateOnly`/`TimeOnly`; the Dapper type handlers
-  are already registered globally in `Program.cs` (`Data/DapperTypeHandlers.cs`).
-- **N-N**: delete-then-reinsert inside a transaction on save; separate query to
-  read the child id list on GET-by-id. See `AppRoleRepository.SyncUsersAsync`.
-- CORS allows any loopback origin; Swagger UI is at `/swagger`.
+## Cross-cutting (checklist for every new feature)
 
-## Frontend conventions (CMS.NG)
+- **Row audit** (`spec/admin/RowAudit.md`): every repository write calls `IRowAuditWriter`
+  (`LogInsertAsync` / `LogUpdateAsync` / `LogDeleteAsync`) — snapshots read **inside** the
+  transaction, audit row written **after** `Commit()` (deliberate — the spec records why;
+  don't re-litigate). Mark JOINed labels / subquery counts `[NotAudited]` or audits go noisy
+  *silently*. `ActionDesc` is a **1000-byte** budget ≈ 500 中文 characters. Every detail/form
+  page hosts `<app-row-audit-badge tableName [pkid]>` (`[compact]` on repeated hosts) keyed
+  on the **surrogate `pkid`**, never a string PK. History: `GET /api/row-audits?tableName=&pkid=`
+  — register the table in `RowAuditsController.AuditedTables` with the **same role its own
+  controller requires**, or the badge reads "無法載入" (unregistered → 400).
+- **PDF export** (`spec/course/CoursePdfExport.md`): server-side QuestPDF, typeset text — never
+  a screenshot. **Never switch the font to 微軟正黑體 / Noto Sans TC**: they render perfectly and
+  silently write Kangxi *radicals* into the text layer (大→⼤), so copy and Ctrl+F break. 新細明體
+  round-trips; a test enforces it. QuestPDF is Community-licensed (free under 1M USD revenue).
+- **Exceptions** (`spec/backend-conventions.md` / `spec/frontend-conventions.md`): the global
+  `ExceptionHandlingMiddleware` logs full detail server-side and returns a generic
+  `{ message }` 500 — **no per-controller try/catch**, never leak stack traces or SQL.
+  Deliberate 400/401/403/404/409 are returned, not thrown. The NG interceptor toasts 5xx and
+  signs out on 401 — **no per-component generic 5xx toasts**; components keep only their
+  business feedback.
 
-- **Standalone components**, signals for state, `inject()` for DI. PrimeNG (Aura
-  theme) for all UI controls; `provideAnimationsAsync`, `MessageService` +
-  `ConfirmationService` are global in `app.config.ts`.
-- **Path aliases** (`tsconfig.json`): `@env/environment`, `@app/*`. API base URL
-  comes from `@env/environment` (`apiUrl`) — never hardcode; no dev proxy.
-- **Feature folders**: `features/{table-plural}/{table}-list|-detail|-form/`.
-  Data access in `core/services/`, models in `core/models/`.
-- **List page**: sortable/paginated `p-table` + `p-drawer` filter. Persist state in
-  sessionStorage under `{entity}-list-filters`, `{entity}-list-sort`,
-  `{entity}-list-page`. `p-select` in the drawer uses `appendTo="body"`.
-- **Form page**: Reactive Forms; `forkJoin` for parallel lookup + record load on init.
-  String PK field is `disable()`d in edit mode and read back with `getRawValue()`.
-  N-N uses `p-multiselect` (`appendTo="body"`, `[maxSelectedLabels]="9999"`).
-- **Routing**: lazy `loadComponent`. Order `.../new` **before** `.../:id`.
-- **Sidebar**: data-driven nav in `app.ts`; add each feature under its group
-  (e.g. AppRole lives under `系統管理 Admin`).
+## Gotchas
 
-## Adding a feature
+- **.NET SDK pinned to 9** via `global.json` (SDK 10 is installed) — target `net9.0`.
+- **DB**: `.\SQLEXPRESS`, database `CMS`, Trusted Connection (`CMS.API/appsettings.json`).
+- **The API is closed by default.** A global `FallbackPolicy` requires a logged-in caller on
+  every endpoint, so a new controller is protected automatically, and any test that calls one
+  over HTTP needs a bearer token. Corollary: **never return 401 to an authenticated caller
+  who merely got a value wrong** — use 400; the frontend treats every 401 as a session expiry
+  and signs the user out.
+- **Update endpoints sync N-N sets from the request** — never build a PUT from a list row
+  (its N-N pkid arrays are empty; they load on GET-by-id only). Fetch the full record, merge,
+  then PUT, or the links are silently wiped.
+- **`.claude/` is untracked local tooling** — keep it out of commits; never `git add -A`
+  blindly.
 
-Mirror AppRole end to end: (1) read the table in `database/*.sql` and any
-`spec/{feature}.spec.md`; (2) backend models → repository → controller, register in
-`Program.cs`; (3) frontend model → service → list/detail/form, add route + sidebar
-entry; (4) tests both sides (xUnit controller tests with a mocked repo; Karma specs
-for the service + components). Use the `spec/feature-spec.template.md` sections to
-drive the analysis.
+## gstack
 
-## Gotchas / project-specific facts
-
-- **`.NET` SDK is pinned to 9** via `global.json` even though SDK 10 is installed —
-  keep targeting `net9.0`.
-- **`AppRole`'s primary key is `RoleId` (nvarchar), not `pkid`.** `pkid` is an
-  IDENTITY surrogate shown as `主代碼`; the FK from `AppUserRole` references `RoleId`,
-  so routes/updates/deletes key on `RoleId`. It's read-only in the edit form.
-- **`AppRole ↔ AppUser` is N-N** via `AppUserRole` (junction on the string keys
-  `RoleId`/`UserId`). The request carries `UserIds: string[]`; `使用者數` (UserCount)
-  is a correlated subquery.
-- **UI sample PNGs in `spec/` are style references only** — validation follows the
-  DB schema (e.g. `Description` is nullable/optional even though the mockup marks it `*`).
-- **Connection string** (`CMS.API/appsettings.json`) targets `.\SQLEXPRESS`, database `CMS`,
-  Trusted Connection. Tests do **not** hit the DB (repository is mocked).
-- **Ports**: API 5000, frontend 4200 (both fixed in launch/serve config).
-- The Angular production bundle budget was raised to 1MB/2MB because PrimeNG's Aura
-  theme pushes the initial bundle to ~650kB.
+Use gstack's `/browse` skill (installed at `~/.claude/skills/gstack`) for **all** web
+browsing; never the `mcp__claude-in-chrome__*` tools. The other gstack skills appear in the
+session's skill listing — no need to enumerate them here.

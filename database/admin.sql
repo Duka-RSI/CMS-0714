@@ -82,11 +82,24 @@ CREATE TABLE [dbo].[RowAudit](
 	[ActionType] [varchar](20) NOT NULL,
 	[ActionDesc] [varchar](1000) NULL,
 	[DateTime] [datetime] NOT NULL,
- CONSTRAINT [PK_RowAudit] PRIMARY KEY CLUSTERED 
+	[BeforeValues] [nvarchar](max) NULL,
+	[AfterValues] [nvarchar](max) NULL,
+ CONSTRAINT [PK_RowAudit] PRIMARY KEY CLUSTERED
 (
 	[pkid] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+GO
+/****** Covering index for GET /api/row-audits: one record's history, newest first.
+        Without it every history read scans the whole (ever-growing) table.        ******/
+CREATE NONCLUSTERED INDEX [IX_RowAudit_TableName_PrimaryKeyValues] ON [dbo].[RowAudit]
+(
+	[TableName] ASC,
+	[PrimaryKeyValues] ASC,
+	[DateTime] DESC,
+	[pkid] DESC
+)
+INCLUDE ([UserName], [ActionType], [ActionDesc])
 GO
 /****** Object:  Table [dbo].[SysConfig]    Script Date: 3/16/2026 3:57:19 PM ******/
 SET ANSI_NULLS ON

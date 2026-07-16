@@ -1,0 +1,70 @@
+@if (compact()) {
+  <!-- Icon-only variant for list rows / board cells: nothing is fetched until clicked. -->
+  <p-button
+    icon="pi pi-history"
+    severity="secondary"
+    [text]="true"
+    [rounded]="true"
+    size="small"
+    pTooltip="異動紀錄 History"
+    (onClick)="openDialog()"
+  />
+} @else {
+  <!-- Badge button: label is bilingual; the inline summary shows the latest change. -->
+  <button type="button" class="audit-badge" (click)="openDialog()" data-testid="audit-badge">
+    <i class="pi pi-history"></i>
+    <span class="audit-badge__label">異動紀錄 History</span>
+    <span class="audit-badge__summary">
+      @if (loading()) {
+        <span class="audit-badge__muted">載入中… Loading</span>
+      } @else if (failed()) {
+        <span class="audit-badge__muted">無法載入 Unavailable</span>
+      } @else if (latest(); as l) {
+        <p-tag [value]="l.actionType" [severity]="actionSeverity(l.actionType)" [rounded]="true" />
+        <span class="audit-badge__by">by {{ l.userName }}</span>
+        <span class="audit-badge__dot">·</span>
+        <span class="audit-badge__when">{{ l.dateTime + 'Z' | date: 'yyyy/MM/dd HH:mm' }}</span>
+      } @else {
+        <span class="audit-badge__muted">尚無異動紀錄 No history</span>
+      }
+    </span>
+  </button>
+}
+
+<!-- Full trail -->
+<p-dialog
+  [(visible)]="dialogVisible"
+  [modal]="true"
+  [dismissableMask]="true"
+  [style]="{ width: '46rem' }"
+  header="異動紀錄 History"
+>
+  @if (loading()) {
+    <div class="audit-empty">載入中… Loading</div>
+  } @else if (failed()) {
+    <div class="audit-empty">無法載入異動紀錄。Could not load history.</div>
+  } @else if (history().length === 0) {
+    <div class="audit-empty">尚無異動紀錄。No history yet.</div>
+  } @else {
+    <p-table [value]="history()" [scrollable]="true" scrollHeight="24rem" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th style="width: 12rem">時間 Time</th>
+          <th style="width: 8rem">動作 Action</th>
+          <th style="width: 10rem">使用者 User</th>
+          <th>說明 Detail</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-row>
+        <tr>
+          <td>{{ row.dateTime + 'Z' | date: 'yyyy/MM/dd HH:mm:ss' }}</td>
+          <td>
+            <p-tag [value]="row.actionType" [severity]="actionSeverity(row.actionType)" [rounded]="true" />
+          </td>
+          <td>{{ row.userName }}</td>
+          <td class="audit-desc">{{ row.actionDesc || '—' }}</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  }
+</p-dialog>

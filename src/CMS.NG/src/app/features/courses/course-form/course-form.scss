@@ -1,0 +1,115 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-header {
+  /* Pin Save/Cancel flush to the top of the scrolling content area; -20px offsets
+     .layout-content's own top padding, which sticky children never cover. */
+  position: sticky;
+  top: -20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: #1e293b;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #334155;
+  margin: 0 0 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #334155;
+}
+
+.field input,
+.field ::ng-deep .p-inputnumber,
+.field ::ng-deep .p-inputnumber-input,
+.field ::ng-deep .p-multiselect,
+.field ::ng-deep .p-select {
+  width: 100%;
+}
+
+/* Wrap multiselect chips instead of clipping them. */
+.field ::ng-deep .p-multiselect-label {
+  white-space: normal;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Read-only PK shown in edit mode (IDENTITY — not an editable control). */
+.readonly-value {
+  padding: 8px 0;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.error {
+  color: #ef4444;
+  font-size: 12px;
+}
+
+.text-required {
+  color: #ef4444;
+}
+
+/* Course has 24 fields — pair the short ones up so the form does not run forever. */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 20px;
+}
+
+@media (max-width: 900px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field ::ng-deep .p-datepicker,
+.field ::ng-deep .p-select,
+.field ::ng-deep .p-multiselect,
+.field ::ng-deep textarea {
+  width: 100%;
+}

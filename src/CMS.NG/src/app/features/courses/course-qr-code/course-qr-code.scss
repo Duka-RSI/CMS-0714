@@ -1,0 +1,36 @@
+.qr-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.qr-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.qr-image {
+  display: block;
+  width: 160px;
+  height: 160px;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 4px;
+  // The QR must stay on white regardless of the viewer's theme, or it stops scanning.
+  background: #ffffff;
+}
+
+.qr-url {
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
+  word-break: break-all;
+
+  &:hover {
+    color: var(--p-primary-color);
+  }
+}
+
+.qr-error {
+  color: var(--p-red-500);
+  font-size: 0.85rem;
+}
