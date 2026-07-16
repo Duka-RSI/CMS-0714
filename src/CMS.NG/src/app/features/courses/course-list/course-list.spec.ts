@@ -1,12 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { of, throwError } from 'rxjs';
-import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { of, throwError, Subject } from 'rxjs';
+import {
+  HttpErrorResponse,
+  HttpHeaders,
+  HttpResponse,
+  provideHttpClient,
+} from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MessageService, ConfirmationService, Confirmation } from 'primeng/api';
 
-import { CourseList } from './course-list';
+import { CourseList, EXPORT_FAILED_MESSAGE, MAX_EXPORT_COURSES } from './course-list';
+import { FileDownloadService } from '@app/core/services/file-download.service';
 import { CourseService } from '@app/core/services/course.service';
 import { LookupService } from '@app/core/services/lookup.service';
 import { Course } from '@app/core/models/course.model';
@@ -75,6 +81,7 @@ describe('CourseList', () => {
       'delete',
       'getById',
       'update',
+      'exportPdf',
     ]);
     // p-table sorts the bound array in place — hand out a copy per call.
     serviceSpy.query.and.callFake(() => of([...courses]));
@@ -459,6 +466,151 @@ describe('CourseList', () => {
       expect(cell('td.cell-title').textContent).toContain('Azure 系統管理');
       expect(addSpy.calls.mostRecent().args[0].severity).toBe('error');
       expect(addSpy.calls.mostRecent().args[0].summary).toBe('儲存失敗');
+    });
+  });
+
+  // ----- PDF export -----
+
+  describe('PDF export', () => {
+    /** A successful export response, with the filename the API chose. */
+    function pdfResponse(filename = 'courses-2-20260716-1430.pdf'): HttpResponse<Blob> {
+      return new HttpResponse<Blob>({
+        body: new Blob(['%PDF-1.7'], { type: 'application/pdf' }),
+        headers: new HttpHeaders({ 'Content-Disposition': `attachment; filename=${filename}` }),
+      });
+    }
+
+    function exportButton(): HTMLButtonElement {
+      const buttons = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.page-header button'),
+      ) as HTMLButtonElement[];
+      return buttons.find((b) => b.textContent?.includes('下載 PDF'))!;
+    }
+
+    it('disables the button until rows are ticked', () => {
+      expect(exportButton().disabled).toBeTrue();
+
+      component['selectedCourses'].set([makeCourse({ pkid: 1 })]);
+      fixture.detectChanges();
+
+      expect(exportButton().disabled).toBeFalse();
+    });
+
+    it('shows how many rows the export covers', () => {
+      component['selectedCourses'].set([makeCourse({ pkid: 1 }), makeCourse({ pkid: 2 })]);
+      fixture.detectChanges();
+
+      // The whole selection is exported, not just the visible page — so say the count.
+      expect(exportButton().textContent).toContain('下載 PDF（2）');
+    });
+
+    it('posts the ticked pkids and saves the returned file', async () => {
+      const save = spyOn(TestBed.inject(FileDownloadService), 'save');
+      serviceSpy.exportPdf.and.returnValue(of(pdfResponse('AZ-104-20260716-1430.pdf')));
+      component['selectedCourses'].set([makeCourse({ pkid: 7 }), makeCourse({ pkid: 9 })]);
+
+      await component['exportSelectedPdf']();
+
+      expect(serviceSpy.exportPdf).toHaveBeenCalledWith([7, 9]);
+      // The name comes from the server's Content-Disposition, not invented here.
+      expect(save).toHaveBeenCalledWith(jasmine.any(Blob), 'AZ-104-20260716-1430.pdf');
+    });
+
+    it('does nothing when nothing is ticked', () => {
+      component['selectedCourses'].set([]);
+
+      component['exportSelectedPdf']();
+
+      expect(serviceSpy.exportPdf).not.toHaveBeenCalled();
+    });
+
+    it('ignores a second click while an export is in flight', () => {
+      // The request never completes, so `exporting` stays true.
+      serviceSpy.exportPdf.and.returnValue(new Subject<HttpResponse<Blob>>().asObservable());
+      component['selectedCourses'].set([makeCourse({ pkid: 1 })]);
+
+      component['exportSelectedPdf']();
+      component['exportSelectedPdf']();
+
+      expect(serviceSpy.exportPdf).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears the busy flag once the download lands', async () => {
+      spyOn(TestBed.inject(FileDownloadService), 'save');
+      serviceSpy.exportPdf.and.returnValue(of(pdfResponse()));
+      component['selectedCourses'].set([makeCourse({ pkid: 1 })]);
+
+      await component['exportSelectedPdf']();
+
+      expect(component['exporting']()).toBeFalse();
+    });
+
+    it("toasts the API's own message on a 400, read out of the blob body", async () => {
+      const addSpy = spyOn(TestBed.inject(MessageService), 'add');
+      serviceSpy.exportPdf.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: new Blob([JSON.stringify({ message: '找不到選取的課程，可能已被刪除。' })]),
+            }),
+        ),
+      );
+      component['selectedCourses'].set([makeCourse({ pkid: 1 })]);
+
+      await component['exportSelectedPdf']();
+
+      expect(addSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({ severity: 'error', detail: '找不到選取的課程，可能已被刪除。' }),
+      );
+      expect(component['exporting']()).toBeFalse();
+    });
+
+    it('leaves a 5xx to the global interceptor rather than double-toasting', async () => {
+      const addSpy = spyOn(TestBed.inject(MessageService), 'add');
+      serviceSpy.exportPdf.and.returnValue(
+        throwError(() => new HttpErrorResponse({ status: 500, error: new Blob([]) })),
+      );
+      component['selectedCourses'].set([makeCourse({ pkid: 1 })]);
+
+      await component['exportSelectedPdf']();
+
+      // auth-error.interceptor already toasts every 5xx; a second one here would stack.
+      expect(addSpy).not.toHaveBeenCalled();
+      expect(component['exporting']()).toBeFalse();
+    });
+
+    it('falls back to a generic message when a 4xx body carries none', async () => {
+      const addSpy = spyOn(TestBed.inject(MessageService), 'add');
+      serviceSpy.exportPdf.and.returnValue(
+        throwError(() => new HttpErrorResponse({ status: 404, error: new Blob(['not json']) })),
+      );
+      component['selectedCourses'].set([makeCourse({ pkid: 1 })]);
+
+      await component['exportSelectedPdf']();
+
+      expect(addSpy).toHaveBeenCalledWith(
+        jasmine.objectContaining({ severity: 'error', detail: EXPORT_FAILED_MESSAGE }),
+      );
+    });
+
+    it('blocks an export larger than the API accepts, before sending it', () => {
+      component['selectedCourses'].set(
+        Array.from({ length: MAX_EXPORT_COURSES + 1 }, (_, i) => makeCourse({ pkid: i + 1 })),
+      );
+      fixture.detectChanges();
+
+      // The API caps this too — this only saves the user a round-trip to find out.
+      expect(exportButton().disabled).toBeTrue();
+    });
+
+    it('allows an export of exactly the limit', () => {
+      component['selectedCourses'].set(
+        Array.from({ length: MAX_EXPORT_COURSES }, (_, i) => makeCourse({ pkid: i + 1 })),
+      );
+      fixture.detectChanges();
+
+      expect(exportButton().disabled).toBeFalse();
     });
   });
 });

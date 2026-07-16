@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { forkJoin, switchMap } from 'rxjs';
+import { firstValueFrom, forkJoin, switchMap } from 'rxjs';
 import { TableModule, TablePageEvent } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { DrawerModule } from 'primeng/drawer';
@@ -20,10 +20,18 @@ import { CourseService } from '@app/core/services/course.service';
 import { LookupService } from '@app/core/services/lookup.service';
 import { RowAuditBadge } from '@app/core/components/row-audit-badge/row-audit-badge';
 import { toIsoDate, fromIsoDate } from '@app/core/utils/week.util';
+import { filenameFromResponse, readErrorMessage } from '@app/core/utils/download.util';
+import { FileDownloadService } from '@app/core/services/file-download.service';
 
 const FILTERS_KEY = 'course-list-filters';
 const SORT_KEY = 'course-list-sort';
 const PAGE_KEY = 'course-list-page';
+
+/** Mirrors CoursePdfRequest.MaxCourses on the API. Kept here to disable the button early. */
+export const MAX_EXPORT_COURSES = 100;
+
+/** Shown when the export fails without a message we can read. */
+export const EXPORT_FAILED_MESSAGE = '匯出 PDF 時發生錯誤。';
 
 interface Option {
   value: number;
@@ -90,11 +98,25 @@ export class CourseList implements OnInit {
   private readonly router = inject(Router);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
+  private readonly downloads = inject(FileDownloadService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly courses = signal<Course[]>([]);
   protected readonly loading = signal(false);
   protected readonly filterVisible = signal(false);
+
+  // ----- PDF export -----
+  /**
+   * Rows ticked for export. p-table keeps this in sync across paging and sorting because the
+   * table has a dataKey, so a selection survives flipping to page 2 and back.
+   */
+  protected readonly selectedCourses = signal<Course[]>([]);
+  protected readonly exporting = signal(false);
+  protected readonly selectedCount = computed(() => this.selectedCourses().length);
+  protected readonly hasSelection = computed(() => this.selectedCount() > 0);
+  /** Mirrors CoursePdfRequest.MaxCourses on the API — the guard there is the real one. */
+  protected readonly maxExport = MAX_EXPORT_COURSES;
+  protected readonly exportOverLimit = computed(() => this.selectedCount() > this.maxExport);
 
   protected readonly partnerOptions = signal<Option[]>([]);
   protected readonly courseGroupOptions = signal<Option[]>([]);
@@ -324,6 +346,47 @@ export class CourseList implements OnInit {
 
   private persistPage(): void {
     sessionStorage.setItem(PAGE_KEY, JSON.stringify({ first: this.first, rows: this.rows }));
+  }
+
+  // ----- PDF export -----
+
+  /**
+   * Download the ticked courses as one PDF.
+   *
+   * The document is built server-side: the Chinese needs a font the browser bundle has no
+   * business carrying, and the API already holds every field the detail page shows.
+   */
+  async exportSelectedPdf(): Promise<void> {
+    const pkids = this.selectedCourses().map((c) => c.pkid);
+    if (pkids.length === 0 || this.exporting()) {
+      return;
+    }
+
+    this.exporting.set(true);
+    try {
+      const response = await firstValueFrom(this.service.exportPdf(pkids));
+      const blob = response.body;
+      if (!blob) {
+        this.toastExportError(EXPORT_FAILED_MESSAGE);
+        return;
+      }
+      this.downloads.save(blob, filenameFromResponse(response, `courses-${pkids.length}.pdf`));
+    } catch (error) {
+      // responseType 'blob' applies to the error body too, so the API's { message } arrives
+      // as a Blob rather than parsed JSON — including the 400 for "these rows are gone".
+      // The 5xx interceptor hits the same wall and falls back to its generic toast, which is
+      // why a 5xx is left to it and only the 4xx is reported here.
+      const failure = error as HttpErrorResponse;
+      if (failure.status < 500) {
+        this.toastExportError((await readErrorMessage(failure)) ?? EXPORT_FAILED_MESSAGE);
+      }
+    } finally {
+      this.exporting.set(false);
+    }
+  }
+
+  private toastExportError(detail: string): void {
+    this.messageService.add({ severity: 'error', summary: '匯出失敗', detail });
   }
 
   // ----- row actions -----
