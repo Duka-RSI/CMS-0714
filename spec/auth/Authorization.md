@@ -195,7 +195,7 @@ to any logged-in user. The same split applies to `/api/lookups/app-roles`.
 | `core/models/auth.model.ts` | `LoginRequest`, `AuthProfile`, `ADMIN_ROLE` |
 | `core/services/auth.service.ts` | session storage, profile/roles signals, login/logout |
 | `core/interceptors/auth.interceptor.ts` | attaches `Authorization: Bearer` |
-| `core/interceptors/auth-error.interceptor.ts` | 401 → clear session → `/login` |
+| `core/interceptors/auth-error.interceptor.ts` | 401 → clear session → `/login`; 5xx → generic error toast |
 | `core/guards/auth.guard.ts` | blocks routes without a token |
 | `features/auth/login/` | the public login page |
 | `features/profile/my-profile/` | 我的帳號 — `/profile`, reachable by every role; rename + change password |

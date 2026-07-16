@@ -48,4 +48,10 @@ worked examples to mirror, and `frontend-conventions.md` for the Angular side.
   the model; `ActionDesc` is `varchar` under a Chinese collation, so its 1000 is **bytes,
   not characters**. Nothing reads RowAudit back, and there is still no audit badge
   component despite the `/crud` skill.
+- **Global exception handling**: `Middleware/ExceptionHandlingMiddleware.cs` (outermost in
+  the pipeline) turns any unhandled exception into a logged, generic 500 with the same
+  `{ message }` body shape controllers use — the caller never sees stack traces, SQL text,
+  or connection details. **Do not add per-controller try/catch for unexpected errors**;
+  deliberate results (400/401/403/404/409) are returned, not thrown, so they pass through
+  untouched. Covered end-to-end by `ExceptionHandlingPipelineTests`.
 - CORS allows any loopback origin; Swagger UI is at `/swagger`.

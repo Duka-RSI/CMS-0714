@@ -1,5 +1,6 @@
 using CMS.API.Auditing;
 using CMS.API.Data;
+using CMS.API.Middleware;
 using CMS.API.Repositories;
 using CMS.API.Security;
 using Dapper;
@@ -118,6 +119,10 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // --- Pipeline ---
+// Outermost on purpose: anything the rest of the pipeline throws becomes a logged,
+// generic 500 — no stack trace, SQL text, or connection string ever reaches the caller.
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {

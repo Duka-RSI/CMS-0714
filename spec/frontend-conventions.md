@@ -63,6 +63,12 @@ worked examples and `backend-conventions.md` for the API side.
   interceptor, a 401→sign-out interceptor and `authGuard` are wired globally, so a new
   feature route needs no auth work: add it to `protectedRoutes` and it is guarded.
   Admin-only menu sections carry `adminOnly: true` — never match on the Chinese title.
+- **HTTP error handling**: `auth-error.interceptor.ts` centralises the two failures no
+  caller can handle locally — 401 → sign out + `/login` (login endpoint exempt), and
+  **5xx → global error toast** showing the `{ message }` the API's exception middleware
+  returns (fallback text when the body is empty). Components keep handling their own
+  business feedback (validation 400s, 403/404/409); they should **not** add their own
+  generic toast for 5xx.
 - **Sidebar**: data-driven nav in `app.ts`; add each feature under its group
   (e.g. AppRole lives under `系統管理 Admin`, Partner under `課程管理 Course`).
 - **Row-audit badge**: `<app-row-audit-badge tableName="X" [pkid]="record.pkid" />`
